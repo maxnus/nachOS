@@ -1,0 +1,60 @@
+[project]
+name = "sc2nachos"
+dynamic = ["version"]
+description = "NachOS — an event-driven StarCraft II bot API for Python"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Max Nusspickel", email = "max.nusspickel@gmail.com" }]
+keywords = ["StarCraft", "StarCraft 2", "StarCraft II", "AI", "Bot"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Games/Entertainment :: Real Time Strategy",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "pys2clientprotocol>=1.0.2",
+    "aiohttp>=3.11",
+    "numpy>=2.1",
+    "loguru>=0.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/maxnus/nachOS"
+Repository = "https://github.com/maxnus/nachOS"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/sc2nachos/__about__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sc2nachos"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning:google.protobuf.*",
+    "ignore::DeprecationWarning:s2clientprotocol.*",
+]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
