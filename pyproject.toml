@@ -33,6 +33,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
     "ruff>=0.8",
+    "pyright>=1.1.390",
 ]
 
 [build-system]
@@ -51,6 +52,12 @@ filterwarnings = [
     "ignore::DeprecationWarning:google.protobuf.*",
     "ignore::DeprecationWarning:s2clientprotocol.*",
 ]
+
+[tool.pyright]
+include = ["src", "tests", "tools"]
+pythonVersion = "3.12"
+# protobuf ships type stubs without inline source; nothing to fix on our side.
+reportMissingModuleSource = false
 
 [tool.ruff]
 line-length = 120

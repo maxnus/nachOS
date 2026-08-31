@@ -1,0 +1,90 @@
+"""Identifier enums: the curated public API and the raw catalog it is defined from."""
+
+import pytest
+
+from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
+from sc2nachos.ids._base import ReadableIntEnum
+from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawEffectId, RawUnitTypeId, RawUpgradeId
+
+CURATED = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
+RAW = (RawUnitTypeId, RawAbilityId, RawUpgradeId, RawBuffId, RawEffectId)
+PAIRS = tuple(zip(CURATED, RAW, strict=True))
+
+
+@pytest.mark.parametrize("enum", CURATED + RAW)
+def test_ids_are_readable_int_enums(enum: type[ReadableIntEnum]) -> None:
+    """Every id enum is an int enum that prints as its name."""
+    assert issubclass(enum, ReadableIntEnum)
+    member = next(iter(enum))
+    assert isinstance(member, int)
+    assert str(member) == f"{enum.__name__}.{member.name}"
+    assert f"{member}" == str(member)
+    assert f"{member:d}" == str(int(member))
+
+
+@pytest.mark.parametrize("enum", CURATED)
+def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> None:
+    """Curated modules define members from the raw catalog, never as hardcoded ids.
+
+    Guards the property that makes renaming and re-generation safe: no game id is written out as a number, so a
+    patch that renumbers something is a regeneration rather than a hand-edit.
+    """
+    import inspect
+
+    source = inspect.getsource(enum)
+    assignments = [
+        line.split("=", 1)[1].strip()
+        for line in source.splitlines()
+        if "=" in line and not line.strip().startswith(("#", '"', "'"))
+    ]
+    assert assignments, f"{enum.__name__} has no members"
+    for assignment in assignments:
+        assert assignment.startswith("Raw"), f"{enum.__name__} member assigned a literal: {assignment}"
+
+
+@pytest.mark.parametrize(("curated", "raw"), PAIRS)
+def test_curated_bridges_to_raw_by_value(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
+    """A curated member equals its raw counterpart and interchanges with it as a mapping key."""
+    for member in curated:
+        counterpart = raw(int(member))
+        assert member == counterpart
+        assert {counterpart: "value"}[member] == "value"
+
+
+@pytest.mark.parametrize(("curated", "raw"), PAIRS)
+def test_curated_is_a_subset_of_the_catalog(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
+    """Every curated id exists in the generated catalog — curation filters, it never invents."""
+    catalog = {int(member) for member in raw}
+    assert {int(member) for member in curated} <= catalog
+
+
+@pytest.mark.parametrize("enum", RAW)
+def test_catalog_ids_are_unique(enum: type[ReadableIntEnum]) -> None:
+    """No two catalog names share an id, so nothing is silently aliased away."""
+    assert len(enum.__members__) == len({int(member) for member in enum}), f"{enum.__name__} has aliased members"
+
+
+@pytest.mark.parametrize("enum", CURATED)
+def test_unknown_ids_raise(enum: type[ReadableIntEnum]) -> None:
+    """An id outside the curated set raises rather than resolving to a fallback.
+
+    A deliberate choice: a missing id is a gap to fill and should be loud. If a permissive mode is ever wanted,
+    it goes in via `_missing_` without renumbering anything.
+    """
+    unknown = max(int(member) for member in enum) + 10_000
+    with pytest.raises(ValueError):
+        enum(unknown)
+
+
+def test_known_ids_have_expected_values() -> None:
+    """A handful of ids pinned against the game's own numbering, as a canary for a bad regeneration."""
+    assert UnitTypeId.SCV == 45
+    assert UnitTypeId.MARINE == 48
+    assert UnitTypeId.COMMANDCENTER == 18
+    assert AbilityId.SMART == 1
+
+
+def test_renaming_preserves_identity() -> None:
+    """A curated name is free to differ from Blizzard's while still being the same id."""
+    assert RawUnitTypeId.LurkerMP == UnitTypeId.LURKERMP
+    assert RawUnitTypeId.Lurker != UnitTypeId.LURKERMP

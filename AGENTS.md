@@ -31,6 +31,13 @@ These are the non-negotiables. They exist because this library is published for 
   `run_local` / `run_ladder`, which take an already-built instance.
 - **No AvocaDOS-shaped quirks.** Nothing may exist in NachOS solely to make something work in AvocaDOS. If in
   doubt, the awkwardness stays in AvocaDOS. Better still, fix it so neither side needs it.
+- **NachOS owes python-sc2 nothing.** This is a new package, not a fork and not a compatible replacement — no API
+  compatibility, no naming, no behavior. python-sc2 is a reference for *what the game requires*, never for *how to
+  express it*. When porting, the question is never "what does python-sc2 do here" but "what should this do", and
+  where it is wrong or awkward NachOS must be right, even if that means the consuming bot has to change. The
+  failure mode is silent: matching the reference feels like diligence, which is how its bugs and its internal
+  development names get copied in. Already caught: `Point2.rounded` there is `math.floor`; `Rect` subclasses
+  `Point2` and so has a `distance_to`; `PUNISHERGRENADES` is what a player calls concussive shells.
 - **Scope:** anything useful to any bot maker, if it is (or can be made) acceptable quality — protocol, state, data
   model, units, orders, events, geometry, pathfinding, map analysis, generic utilities. Not: strategy, build
   orders, combat micro, roles, economy management.
@@ -50,7 +57,35 @@ Carried over from AvocaDOS, so the two codebases read alike:
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
 - **`TYPE_CHECKING` guard** for imports that would otherwise be circular.
 - **loguru**, not stdlib `logging`.
+- **US spelling** everywhere in code, comments, docstrings and docs — `behavior`, `initialize`, `summarize`,
+  `color`, `center`. The exception is generated identifiers: `ids/raw/` mirrors Blizzard's own names verbatim
+  (`BuildinProgressNonCancellable`), and those are data, never to be "corrected".
 - Line length 120. `ruff check` and `ruff format --check` must pass.
+
+## Review checklist
+
+Each of these came from a real bug found in review, mostly in code that looked correct and passed its tests.
+
+- **Annotate as tightly as the value allows.** `Self` for type-preserving operations, exact tuple arity
+  (`tuple[float, float]`, not `tuple[float, ...]`), fixed-length returns where the count is in the name, real
+  protobuf types under `TYPE_CHECKING`. `pyright` runs in CI and has caught what `ruff` and the tests did not.
+- **No false IS-A.** Types of different shape must not inherit from each other — `Point3` is not a `Point2`, a
+  `Rect` is not a point. Share behavior through a non-public base instead. A subtype claim that is not
+  substitutable makes every downstream bug typecheck cleanly.
+- **Never silently discard data.** An operation that cannot preserve a coordinate, a field, or a dimension must
+  raise, with a message naming both operands and the explicit conversion. Padding and truncation hide bugs.
+- **Numeric checks must accept numpy scalars.** Only `numpy.float64` subclasses `float`; `float32` and the
+  integer types subclass neither. Use `numbers.Real`, ordered *after* the concrete types — the ABC check is
+  roughly 3x slower, so the common path must not reach it.
+- **A `tuple` subclass must define `__radd__` and `__rmul__`.** Otherwise `(1, 2) + point` inherits concatenation
+  and `2 * point` inherits repetition, both returning a wrong answer with no error.
+- **`__contains__` has no reflected form.** Return a bool, never `NotImplemented` — it is truthy, so
+  `"banana" in rect` answers `True`.
+- **Every exported name is a promise.** No public API without a caller or a test that shows why it exists, and no
+  second spelling of an operation that already exists.
+- **Measure before claiming.** Benchmark competing shapes rather than reasoning about them; grep for real call
+  sites before calling something hot. Several "obvious" optimizations in review turned out to target the wrong
+  cost entirely.
 
 ## Testing
 
@@ -61,4 +96,6 @@ transport.
 | Task | Command |
 |---|---|
 | Run tests | `pytest` |
-| Lint | `ruff check .` |
+| Lint | `ruff check .` and `ruff format --check .` |
+| Type check | `pyright` (locally: `--pythonpath ../AvocaDOS/.venv/Scripts/python.exe`) |
+| Regenerate raw ids | `python tools/generate_ids.py` after refreshing `data/stableid.json` |
