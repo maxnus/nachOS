@@ -1,10 +1,15 @@
 """Geometry primitives in the game's coordinate space."""
 
-from sc2nachos.geometry._point import Point2, Point3, PointLike, Rect
+from sc2nachos.geometry._area import Area
+from sc2nachos.geometry._point import Point, Point3D, PointLike
+from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
 
 __all__ = [
-    "Point2",
-    "Point3",
+    "Area",
+    "Point",
+    "Point3D",
     "PointLike",
-    "Rect",
+    "Rectangle",
+    "Tile",
+    "TileSet",
 ]

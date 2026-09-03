@@ -18,11 +18,15 @@ class HasPosition(Protocol):
     """Anything that knows where it is — a unit, a structure, an expansion."""
 
     @property
-    def position(self) -> Point2: ...
+    def position(self) -> Point: ...
 
 
-# A point, a plain coordinate tuple, or anything with a `.position`.
-PointLike = Union["Point2", "Point3", tuple[float, ...], HasPosition]
+# Coordinates on the ground plane, or on it with a height. Anything a point can be, except the indirection
+# through `.position`, which `coordinates` resolves.
+Coordinates = Union["Point", "Point3D", tuple[float, float], tuple[float, float, float]]
+
+# A point, a plain coordinate pair or triple, or anything with a `.position`.
+PointLike = Coordinates | HasPosition
 
 
 # Scalars accepted by point arithmetic. `numbers.Real` catches numpy scalars, which subclass neither `int` nor
@@ -30,18 +34,24 @@ PointLike = Union["Point2", "Point3", tuple[float, ...], HasPosition]
 SCALAR_TYPES = (int, float, numbers.Real)
 
 
-def coordinates(value: PointLike) -> tuple[float, ...]:
-    """The coordinate tuple of a point, or of anything that has a `.position`."""
-    if isinstance(value, tuple):
+def coordinates(value: PointLike) -> Coordinates:
+    """The coordinate tuple of a point, or of anything that has a `.position`.
+
+    `.position` is consulted before the raw tuple so that a type storing something other than its position --
+    a `Tile`, which holds its grid address -- reports where it actually sits.
+    """
+    if isinstance(value, _PointND):
         return value
     position = getattr(value, "position", None)
-    if position is None:
-        raise TypeError(f"expected a point or something with a .position, got {type(value).__name__}")
-    return position
+    if position is not None:
+        return position
+    if isinstance(value, tuple):
+        return value
+    raise TypeError(f"expected a point or something with a .position, got {type(value).__name__}")
 
 
-class _CoordinateTuple(tuple[float, ...]):
-    """Coordinate math shared by `Point2` and `Point3`.
+class _PointND(tuple[float, ...]):
+    """A point of any dimensionality: the coordinate math shared by `Point` and `Point3D`.
 
     Operations preserve the operand's type, and reject operands of a different dimensionality. The arithmetic
     operators are vector operations, not tuple ones: `point * 3` scales rather than repeating the sequence.
@@ -63,21 +73,6 @@ class _CoordinateTuple(tuple[float, ...]):
     def position(self) -> Self:
         """The point itself, so points and units can be used interchangeably."""
         return self
-
-    @property
-    def rounded(self) -> Self:
-        """The nearest integer coordinates."""
-        return type(self)(round(value) for value in self)
-
-    @property
-    def floored(self) -> Self:
-        """The integer coordinates of the grid cell containing this point."""
-        return type(self)(math.floor(value) for value in self)
-
-    @property
-    def cell_center(self) -> Self:
-        """The center of the grid cell containing this point, where units sit."""
-        return type(self)(math.floor(value) + 0.5 for value in self)
 
     @property
     def length(self) -> float:
@@ -127,17 +122,17 @@ class _CoordinateTuple(tuple[float, ...]):
         fraction = distance / separation
         return type(self)(value + fraction * (target - value) for value, target in zip(self, position, strict=True))
 
-    def direction_vector(self, other: PointLike) -> Point2:
+    def direction_vector(self, other: PointLike) -> Point:
         """The unit vector on the ground plane pointing from this point to another."""
         position = coordinates(other)
-        return Point2((position[0] - self[0], position[1] - self[1])).normalized
+        return Point((position[0] - self[0], position[1] - self[1])).normalized
 
     def angle_to(self, other: PointLike) -> float:
         """The angle in radians to another point, from the positive x-axis."""
         position = coordinates(other)
         return math.atan2(position[1] - self[1], position[0] - self[0])
 
-    def rotate(self, angle: float, *, around: PointLike | None = None) -> Self:
+    def rotated(self, angle: float, *, around: PointLike | None = None) -> Self:
         """The point rotated by `angle` radians about the vertical axis through `around`, or the origin.
 
         Only the pivot's x and y are read, so it may be of any dimensionality. Height is carried through.
@@ -162,22 +157,12 @@ class _CoordinateTuple(tuple[float, ...]):
             raise ValueError("no points to choose from")
         return max(candidates, key=self.distance_to_squared)
 
-    @property
-    def neighbors4(self) -> tuple[Self, Self, Self, Self]:
-        """The four orthogonally adjacent points."""
-        return (self + (0, 1), self + (0, -1), self + (1, 0), self + (-1, 0))
-
-    @property
-    def neighbors8(self) -> tuple[Self, Self, Self, Self, Self, Self, Self, Self]:
-        """The eight adjacent points, diagonals included."""
-        return (*self.neighbors4, self + (1, 1), self + (1, -1), self + (-1, 1), self + (-1, -1))
-
     def _dimension_error(self, position: tuple[float, ...]) -> ValueError:
         """The error for combining points of unequal dimensionality."""
         return ValueError(
             f"cannot combine {len(self)} coordinates with {len(position)}: "
             f"{type(self).__name__}{tuple(self)} and {tuple(position)}. "
-            f"Convert explicitly with .to2 or .to3."
+            f"Convert explicitly with .ground or .with_height."
         )
 
     def _combine(self, other: PointLike | float, operation: Callable[[float, float], float]) -> Self:
@@ -208,7 +193,7 @@ class _CoordinateTuple(tuple[float, ...]):
 
     # Required, not conveniences: without them `(1, 2) + point` inherits tuple concatenation and `2 * point`
     # inherits sequence repetition, both silently returning a 4-tuple. Delegating to the forward operator keeps
-    # `Point2`'s fast path. Addition and multiplication are commutative, so no operand order is lost.
+    # `Point`'s fast path. Addition and multiplication are commutative, so no operand order is lost.
 
     def __radd__(self, other: PointLike | float) -> Self:
         return self.__add__(other)
@@ -229,8 +214,8 @@ class _CoordinateTuple(tuple[float, ...]):
         return f"{type(self).__name__}({tuple(self)})"
 
 
-class Point2(_CoordinateTuple, tuple[float, float]):
-    """An immutable 2D point, constructed from an iterable: `Point2((3, 4))`.
+class Point(_PointND, tuple[float, float]):
+    """An immutable 2D point, constructed from an iterable: `Point((3, 4))`.
 
     A tuple subclass, so it unpacks, hashes and compares like `(x, y)` and works as a dict key.
     """
@@ -242,24 +227,24 @@ class Point2(_CoordinateTuple, tuple[float, float]):
         """Build from a protobuf 2D point message."""
         return cls((data.x, data.y))
 
-    def to3(self, z: float = 0.0) -> Point3:
-        """The point at height `z`."""
-        return Point3((self[0], self[1], z))
+    def with_height(self, z: float = 0.0) -> Point3D:
+        """The point lifted to height `z`."""
+        return Point3D((self[0], self[1], z))
 
     # Two-coordinate fast paths, ~2.5x quicker than the general implementation and used in per-unit loops.
 
-    def __add__(self, other: PointLike | float) -> Point2:  # pyright: ignore[reportIncompatibleMethodOverride]
+    def __add__(self, other: PointLike | float) -> Point:  # pyright: ignore[reportIncompatibleMethodOverride]
         if isinstance(other, tuple) and len(other) == 2:
-            return Point2((self[0] + other[0], self[1] + other[1]))
+            return Point((self[0] + other[0], self[1] + other[1]))
         return super().__add__(other)
 
-    def __sub__(self, other: PointLike | float) -> Point2:
+    def __sub__(self, other: PointLike | float) -> Point:
         if isinstance(other, tuple) and len(other) == 2:
-            return Point2((self[0] - other[0], self[1] - other[1]))
+            return Point((self[0] - other[0], self[1] - other[1]))
         return super().__sub__(other)
 
 
-class Point3(_CoordinateTuple, tuple[float, float, float]):
+class Point3D(_PointND, tuple[float, float, float]):
     """An immutable 3D point, used for terrain height and debug drawing."""
 
     __slots__ = ()
@@ -274,83 +259,7 @@ class Point3(_CoordinateTuple, tuple[float, float, float]):
         """The height coordinate."""
         return self[2]
 
-    def to2(self) -> Point2:
-        """The point with its height dropped."""
-        return Point2((self[0], self[1]))
-
-
-class Rect(tuple[float, float, float, float]):
-    """An axis-aligned rectangle, as `(x, y, width, height)`."""
-
-    __slots__ = ()
-
-    @classmethod
-    def from_proto(cls, data: common_pb2.RectangleI) -> Self:
-        """Build from a protobuf `RectangleI`, which stores opposite corners rather than a size."""
-        return cls((data.p0.x, data.p0.y, data.p1.x - data.p0.x, data.p1.y - data.p0.y))
-
     @property
-    def x(self) -> float:
-        """The left edge."""
-        return self[0]
-
-    @property
-    def y(self) -> float:
-        """The bottom edge."""
-        return self[1]
-
-    @property
-    def width(self) -> float:
-        """Extent along x."""
-        return self[2]
-
-    @property
-    def height(self) -> float:
-        """Extent along y."""
-        return self[3]
-
-    @property
-    def right(self) -> float:
-        """The right edge."""
-        return self[0] + self[2]
-
-    @property
-    def top(self) -> float:
-        """The top edge."""
-        return self[1] + self[3]
-
-    @property
-    def center(self) -> Point2:
-        """The midpoint."""
-        return Point2((self[0] + self[2] / 2, self[1] + self[3] / 2))
-
-    @property
-    def corners(self) -> tuple[Point2, Point2, Point2, Point2]:
-        """The four corners, counter-clockwise from the bottom left."""
-        return (
-            Point2((self.x, self.y)),
-            Point2((self.right, self.y)),
-            Point2((self.right, self.top)),
-            Point2((self.x, self.top)),
-        )
-
-    def offset(self, point: PointLike) -> Rect:
-        """The rectangle shifted by a point, keeping its size.
-
-        A named method rather than `+`, which could as easily mean growing the rectangle as moving it.
-        """
-        position = coordinates(point)
-        return Rect((self[0] + position[0], self[1] + position[1], self[2], self[3]))
-
-    def contains(self, point: PointLike) -> bool:
-        """Whether a point lies inside, edges included."""
-        position = coordinates(point)
-        return self.x <= position[0] <= self.right and self.y <= position[1] <= self.top
-
-    def __contains__(self, point: object) -> bool:
-        if isinstance(point, tuple) and len(point) >= 2:
-            return self.contains(point)
-        return hasattr(point, "position") and self.contains(point)  # pyright: ignore[reportArgumentType]
-
-    def __repr__(self) -> str:
-        return f"Rect(x={self.x}, y={self.y}, width={self.width}, height={self.height})"
+    def ground(self) -> Point:
+        """The point projected onto the ground plane, dropping its height."""
+        return Point((self[0], self[1]))
