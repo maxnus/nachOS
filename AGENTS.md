@@ -86,6 +86,26 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **Measure before claiming.** Benchmark competing shapes rather than reasoning about them; grep for real call
   sites before calling something hot. Several "obvious" optimizations in review turned out to target the wrong
   cost entirely.
+- **A name must not claim behavior the code lacks.** The most common defect found in review, and the one tests
+  never catch. `rescale` was a plain `lerp`; `exp_decay` was a linear blend that mixed seconds with game steps;
+  `Region` was a set of discrete tiles; `Area.size` meant area for two shapes and a point count for the third;
+  `Point.floored` returned a tile corner wearing a position's type. Read the body, then ask what the name
+  promised.
+- **Test invariants across implementations, not one at a time.** `closest_point_to` returned a tile center from
+  `TileSet` and a boundary point from `Tile` and `Rectangle`, so one square of ground answered three ways — and
+  `TileSet`'s distance did not match the point it returned. Every per-class test passed. Parametrize one probe
+  over every implementation of the interface.
+- **A base class without `__slots__` gives every subclass a `__dict__`.** `Area` omitted it, so `Tile`'s
+  `__slots__ = ()` and `Rectangle`'s `slots=True` were both inert: wasted bytes on thousands of instances, and
+  arbitrary attributes assignable on a frozen value. `functools.cached_property` needs that dict, so a class
+  wanting one opts back in by declaring no slots — it cannot have both, and it cannot override an abstract
+  `property`.
+- **Set iteration order depends on how the set was built.** Two `frozenset`s holding equal elements iterate
+  differently when one was reached by `difference`. That reached `random_point`, making a seeded game
+  unreproducible. Anything that picks or orders elements must sort first.
+- **`isinstance` against an ABC subclass costs ~6x a plain class when it misses** — ~125 ns against ~20. A
+  dispatch chain over `Area` implementations pays that per branch it rejects. Prefer a virtual method; a type
+  switch is both slower and closed to new shapes.
 
 ## Testing
 
