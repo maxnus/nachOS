@@ -379,8 +379,8 @@ class TileSet(Area):
         return tiles[nearest].closest_point_to(position)
 
     def random_point(self) -> Point:
-        """The center of a tile drawn uniformly from the set."""
-        return random.choice(self._ordered).center
+        """A point drawn uniformly from the covered ground."""
+        return random.choice(self._ordered).random_point()
 
     def bounding_rectangle(self) -> Rectangle:
         """The smallest rectangle containing every covered tile."""

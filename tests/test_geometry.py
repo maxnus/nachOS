@@ -474,6 +474,13 @@ class TestAreaAgreement:
     def test_membership_agrees(self, probe: tuple[float, float]) -> None:
         assert len({probe in area for area in self.areas}) == 1
 
+    def test_random_point_spreads_over_the_ground(self) -> None:
+        """A tile set once answered with tile centers, so this one-tile area returned one point forever."""
+        for area in self.areas:
+            points = [area.random_point() for _ in range(100)]
+            assert all(point in area for point in points), area
+            assert len({(point.x < 0.5, point.y < 0.5) for point in points}) == 4, area
+
 
 class TestTileSet:
     def test_points_in_one_tile_collapse(self) -> None:
