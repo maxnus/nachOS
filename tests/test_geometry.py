@@ -1,11 +1,12 @@
 """Geometry primitives."""
 
 import math
+from collections.abc import Callable
 
 import numpy
 import pytest
 
-from sc2nachos.geometry import Point, Point3D, Rectangle, Tile, TileSet
+from sc2nachos.geometry import Area, Circle, Point, Point3D, Rectangle, Tile, TileSet
 
 
 class TestPoint2:
@@ -335,6 +336,17 @@ class TestRectangle:
         assert Rectangle(0.4, 0.4, 0.2, 0.2).rounded_in() is None
         assert Rectangle(0.0, 0.0, 1.0, 0.5).rounded_in() is None, "one axis is enough"
 
+    def test_rejects_a_negative_extent(self) -> None:
+        """Negatives cancel in `area`, so Rectangle(0, 0, -5, -5) used to report an area of 25."""
+        with pytest.raises(ValueError, match="negative extent"):
+            Rectangle(0, 0, -5, -5)
+
+    def test_allows_a_zero_extent(self) -> None:
+        flat = Rectangle(3, 3, 0, 0)
+        assert flat.area == 0.0
+        assert (3, 3) not in flat
+        assert not flat.tiles()
+
     def test_closest_point_to(self) -> None:
         rect = Rectangle(0, 0, 10, 10)
         assert rect.closest_point_to((5, 5)) == ((5, 5), 0.0)
@@ -474,6 +486,37 @@ class TestAreaAgreement:
     def test_membership_agrees(self, probe: tuple[float, float]) -> None:
         assert len({probe in area for area in self.areas}) == 1
 
+    @pytest.mark.parametrize(
+        "area",
+        [
+            Tile(3, 1),
+            Rectangle(1.3, 2.7, 4.2, 3.1),
+            Circle((4.3, 2.8), 3.5),
+            Circle((0.5, 0.5), 1.0),  # tile centers sit exactly on the boundary
+            TileSet([Tile(0, 0), Tile(5, 5)]),
+        ],
+    )
+    def test_tiles_are_exactly_those_whose_center_is_inside(self, area: Area) -> None:
+        """The one rule that defines `tiles()` for every shape, checked against the shape's own membership."""
+        covered = area.tiles()
+        bounds = area.bounding_rectangle()
+        candidates = [
+            Tile(x, y)
+            for x in range(math.floor(bounds.left) - 1, math.ceil(bounds.right) + 1)
+            for y in range(math.floor(bounds.bottom) - 1, math.ceil(bounds.top) + 1)
+        ]
+        assert candidates, area
+        for tile in candidates:
+            assert (tile in covered) == (tile.center in area), (area, tile)
+
+    @pytest.mark.parametrize(
+        "rect", [Rectangle(0, 0, 3, 2), Rectangle(1.3, 2.7, 4.2, 3.1), Rectangle(0.6, 0.6, 0.3, 0.3)]
+    )
+    def test_tile_centers_and_tiles_describe_the_same_region(self, rect: Rectangle) -> None:
+        """Their docstring promises a mask over one indexes the other, so they cannot round differently."""
+        centers = rect.tile_centers().reshape(-1, 2)
+        assert {Tile.containing(tuple(point)) for point in centers} == set(rect.tiles())
+
     def test_random_point_spreads_over_the_ground(self) -> None:
         """A tile set once answered with tile centers, so this one-tile area returned one point forever."""
         for area in self.areas:
@@ -488,9 +531,32 @@ class TestTileSet:
         assert len(tiles) == 1, "both points fall in the same tile"
         assert (0.7, 0.7) in tiles
 
-    def test_rejects_an_empty_tile_set(self) -> None:
-        with pytest.raises(ValueError, match="at least one tile"):
-            TileSet([])
+    def test_an_empty_tile_set_answers_what_it_can(self) -> None:
+        empty = TileSet([])
+        assert len(empty) == 0
+        assert not empty
+        assert empty.area == 0.0
+        assert (0, 0) not in empty
+        assert list(empty) == []
+        assert empty.tiles() is empty
+        assert empty == TileSet([])
+        assert repr(empty) == "TileSet(empty)"
+
+    @pytest.mark.parametrize(
+        ("question", "message"),
+        [
+            (lambda s: s.center, "no center"),
+            (lambda s: s.bounding_rectangle(), "no bounding rectangle"),
+            (lambda s: s.closest_point_to((0, 0)), "no closest point"),
+            (lambda s: s.random_point(), "no points to draw from"),
+        ],
+    )
+    def test_an_empty_tile_set_refuses_what_it_cannot(
+        self, question: Callable[[TileSet], object], message: str
+    ) -> None:
+        """These need a tile to point at, so they raise rather than inventing one."""
+        with pytest.raises(ValueError, match=message):
+            question(TileSet([]))
 
     def test_area_counts_unit_tiles(self) -> None:
         tiles = Rectangle(0, 0, 3, 2).tiles()
@@ -524,7 +590,7 @@ class TestTileSet:
         right = Rectangle(2, 0, 2, 1).tiles()
         assert len(left + right) == 4
         assert (left + right) - right == left
-        assert left - left is None, "a tile set cannot be empty"
+        assert not (left - left), "subtracting everything leaves an empty set"
 
     def test_translated_moves_every_tile(self) -> None:
         tiles = Rectangle(0, 0, 2, 2).tiles()
@@ -556,7 +622,105 @@ class TestTileSet:
         filtered = tiles.filter(lambda point: point.x < 2)
         assert filtered is not None
         assert len(filtered) == 2
-        assert tiles.filter(lambda point: point.x > 100) is None
+        assert tiles.filter(lambda point: point.x > 100) == TileSet([])
 
     def test_equality_is_by_covered_tiles(self) -> None:
         assert Rectangle(0, 0, 2, 2).tiles() != Rectangle(0, 0, 3, 3).tiles()
+
+
+class TestCircle:
+    def test_rejects_a_non_positive_radius(self) -> None:
+        for radius in (0.0, -1.0):
+            with pytest.raises(ValueError, match="positive radius"):
+                Circle((0, 0), radius)
+
+    def test_accepts_anything_point_like(self) -> None:
+        assert Circle((1, 2), 3).center == Circle(Point((1, 2)), 3).center == (1, 2)
+
+    def test_center_is_a_property_not_a_field(self) -> None:
+        """`Area.center` is an abstract property; a dataclass field cannot override one."""
+        assert isinstance(type(Circle((0, 0), 1)).center, property)
+        assert not hasattr(Circle((0, 0), 1), "__dict__")
+
+    def test_measurements(self) -> None:
+        circle = Circle((3, 4), 2)
+        assert circle.radius == 2
+        assert circle.area == pytest.approx(math.pi * 4)
+        assert circle.perimeter == pytest.approx(4 * math.pi)
+
+    def test_membership_includes_the_boundary(self) -> None:
+        circle = Circle((0, 0), 5)
+        assert (0, 0) in circle
+        assert (5, 0) in circle, "the boundary counts"
+        assert (3, 4) in circle
+        assert (5.001, 0) not in circle
+
+    def test_translated(self) -> None:
+        assert Circle((1, 1), 2).translated((3, -1)) == Circle((4, 0), 2)
+
+    def test_closest_point_to_an_outside_point_lands_on_the_boundary(self) -> None:
+        point, distance = Circle((0, 0), 2).closest_point_to((10, 0))
+        assert point == (2, 0)
+        assert distance == pytest.approx(8.0)
+
+    def test_closest_point_to_an_inside_point_is_itself(self) -> None:
+        assert Circle((0, 0), 5).closest_point_to((1, 1)) == ((1, 1), 0.0)
+
+    def test_closest_point_to_the_center_does_not_divide_by_zero(self) -> None:
+        """The old implementation normalized the offset before testing containment."""
+        assert Circle((7, 7), 3).closest_point_to((7, 7)) == ((7, 7), 0.0)
+
+    def test_bounding_rectangle(self) -> None:
+        assert Circle((5, 5), 2).bounding_rectangle() == Rectangle(3, 3, 4, 4)
+
+    def test_random_point_is_inside_and_spreads(self) -> None:
+        circle = Circle((0, 0), 4)
+        points = [circle.random_point() for _ in range(200)]
+        assert all(point in circle for point in points)
+        assert len({(point.x < 0, point.y < 0) for point in points}) == 4
+
+    def test_tiles_are_those_the_circle_covers_the_center_of(self) -> None:
+        tiles = Circle((0.5, 0.5), 1).tiles()
+        assert set(tiles) == {Tile(0, 0), Tile(-1, 0), Tile(1, 0), Tile(0, -1), Tile(0, 1)}
+        assert Tile(-1, -1) not in tiles, "the circle reaches its corner, but not its center 1.41 away"
+
+    def test_a_circle_reaching_no_tile_center_covers_nothing(self) -> None:
+        assert not Circle((0.9, 0.9), 0.4).tiles()
+        assert Circle((0.5, 0.5), 0.4).tiles() == TileSet([Tile(0, 0)]), "the same circle, moved onto a center"
+
+    def test_intersections_of_overlapping_circles(self) -> None:
+        points = Circle((0, 0), 5).intersections_with(Circle((8, 0), 5))
+        assert len(points) == 2
+        assert {(round(p.x, 6), round(p.y, 6)) for p in points} == {(4.0, 3.0), (4.0, -3.0)}
+
+    def test_intersections_are_on_both_boundaries(self) -> None:
+        a, b = Circle((1, 2), 4), Circle((3, 5), 3)
+        for point in a.intersections_with(b):
+            assert point.distance_to(a.center) == pytest.approx(a.radius)
+            assert point.distance_to(b.center) == pytest.approx(b.radius)
+
+    def test_tangent_circles_touch_once(self) -> None:
+        points = Circle((0, 0), 2).intersections_with(Circle((5, 0), 3))
+        assert len(points) == 1
+        assert points[0] == pytest.approx((2.0, 0.0))
+
+    @pytest.mark.parametrize(
+        ("other", "why"),
+        [
+            (Circle((100, 0), 1), "far apart"),
+            (Circle((0, 0), 2), "concentric"),
+            (Circle((0, 0), 5), "the same circle"),
+            (Circle((0.5, 0), 1), "one inside the other"),
+        ],
+    )
+    def test_circles_that_do_not_cross(self, other: Circle, why: str) -> None:
+        assert Circle((0, 0), 5).intersections_with(other) == (), why
+
+    def test_equality_and_hashing(self) -> None:
+        assert Circle((1, 2), 3) == Circle((1, 2), 3)
+        assert Circle((1, 2), 3) != Circle((1, 2), 4)
+        assert len({Circle((1, 2), 3), Circle((1, 2), 3)}) == 1
+        assert Circle((1, 2), 3) != "not a circle"
+
+    def test_repr_round_trips(self) -> None:
+        assert repr(Circle((1, 2), 3.5)) == "Circle(Point((1, 2)), 3.5)"

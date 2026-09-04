@@ -31,8 +31,7 @@ if TYPE_CHECKING:
 class Tile(tuple[int, int], Area):
     """One square of the map grid, addressed by the integer coordinates of its lower left corner.
 
-    The tuple holds the grid address, so a tile indexes a `Field` directly. Used as a point it reads as its
-    `center`, where a unit standing on it sits.
+    The tuple holds the grid address. Used as a point it reads as its `center`.
     """
 
     __slots__ = ()
@@ -99,8 +98,8 @@ class Tile(tuple[int, int], Area):
     def __contains__(self, point: object) -> bool:
         """Whether a point falls on this tile, on the lower edges but not the upper ones.
 
-        This is membership in the area, not in the coordinate pair: `3 in Tile(3, 4)` raises rather than
-        answering True. The parameter is widened only because `tuple` declares it that way.
+        Membership in the area, not in the coordinate pair: `3 in Tile(3, 4)` raises rather than answering
+        True.
         """
         return Tile.containing(point) == self  # pyright: ignore[reportArgumentType]
 
@@ -144,6 +143,12 @@ class Rectangle(Area):
     y: float
     width: float
     height: float
+
+    def __post_init__(self) -> None:
+        """Rejects a negative extent."""
+        # Negatives cancel in `area`, so such a rectangle reports a plausible size while covering nothing.
+        if self.width < 0 or self.height < 0:
+            raise ValueError(f"a rectangle cannot have a negative extent, got {self.width} x {self.height}")
 
     @classmethod
     def from_center(cls, center: PointLike, width: float, height: float) -> Rectangle:
@@ -221,10 +226,7 @@ class Rectangle(Area):
         )
 
     def translated(self, offset: PointLike) -> Rectangle:
-        """The rectangle shifted by `offset`, keeping its size.
-
-        A named method rather than `+`, which could as easily mean growing the rectangle as moving it.
-        """
+        """The rectangle shifted by `offset`, keeping its size."""
         shift = coordinates(offset)
         return Rectangle(self.x + shift[0], self.y + shift[1], self.width, self.height)
 
@@ -251,10 +253,7 @@ class Rectangle(Area):
         return Rectangle(left, bottom, math.ceil(self.right) - left, math.ceil(self.top) - bottom)
 
     def rounded_in(self) -> Rectangle | None:
-        """The largest rectangle on integer coordinates that fits inside this one.
-
-        `None` when no whole tile fits, which would otherwise give a rectangle of negative extent.
-        """
+        """The largest rectangle on integer coordinates that fits inside this one, `None` if none fits."""
         left = math.ceil(self.left)
         bottom = math.ceil(self.bottom)
         right = math.floor(self.right)
@@ -282,33 +281,36 @@ class Rectangle(Area):
         """The rectangle itself."""
         return self
 
+    def tile_range(self) -> tuple[range, range]:
+        """The x and y addresses of the tiles the rectangle covers."""
+        return (
+            range(math.ceil(self.left - 0.5), math.ceil(self.right - 0.5)),
+            range(math.ceil(self.bottom - 0.5), math.ceil(self.top - 0.5)),
+        )
+
     def tile_centers(self, *, offset: PointLike = (0.0, 0.0)) -> ndarray:
-        """The center of every tile the rectangle touches, as an array of shape `(x, y, 2)`.
+        """The center of every tile the rectangle covers, as an array of shape `(x, y, 2)`.
 
         Laid out like the tiles themselves, so a mask over the same region indexes it directly. `offset`
-        shifts every point without changing which tiles are covered: a structure with an even-sized footprint
-        sits on a tile corner rather than on a center.
+        shifts every point without changing which tiles are covered.
         """
         shift = coordinates(offset)
-        xs = numpy.arange(math.floor(self.left), math.ceil(self.right)) + 0.5 + shift[0]
-        ys = numpy.arange(math.floor(self.bottom), math.ceil(self.top)) + 0.5 + shift[1]
+        x_range, y_range = self.tile_range()
+        xs = numpy.arange(x_range.start, x_range.stop) + 0.5 + shift[0]
+        ys = numpy.arange(y_range.start, y_range.stop) + 0.5 + shift[1]
         return numpy.stack(numpy.meshgrid(xs, ys, indexing="ij"), axis=-1)
 
     def tiles(self) -> TileSet:
-        """Every tile the rectangle touches."""
-        return TileSet(
-            Tile(x, y)
-            for x in range(math.floor(self.left), math.ceil(self.right))
-            for y in range(math.floor(self.bottom), math.ceil(self.top))
-        )
+        """Every tile whose center the rectangle contains."""
+        x_range, y_range = self.tile_range()
+        return TileSet(Tile(x, y) for x in x_range for y in y_range)
 
 
 @final
 class TileSet(Area):
     """An area of any shape, held as the set of map tiles it covers.
 
-    A tile set always covers at least one tile. Build one from positions with `Tile.containing`, which makes
-    the snap to the grid explicit.
+    Build one from positions with `Tile.containing`. An empty tile set is falsy.
     """
 
     _tiles: frozenset[Tile]
@@ -316,8 +318,6 @@ class TileSet(Area):
     def __init__(self, tiles: Iterable[Tile]) -> None:
         """A tile set covering `tiles`."""
         self._tiles = frozenset(tiles)
-        if not self._tiles:
-            raise ValueError("a tile set must cover at least one tile")
 
     @property
     def center(self) -> Point:
@@ -327,6 +327,8 @@ class TileSet(Area):
     @cached_property
     def _centroid(self) -> Point:
         """The mean position, computed on first use."""
+        if not self._tiles:
+            raise ValueError("an empty tile set has no center")
         x = y = 0
         for tile in self._tiles:
             x += tile[0]
@@ -344,12 +346,9 @@ class TileSet(Area):
 
     @cached_property
     def _ordered(self) -> tuple[Tile, ...]:
-        """The covered tiles by ascending x then y, sorted on first use.
-
-        A set reached by difference iterates differently from the same set built directly, so anything that
-        picks a tile -- iteration, `random_point`, the spatial index -- would otherwise depend on how the set
-        was assembled rather than on what it contains.
-        """
+        """The covered tiles by ascending x then y, sorted on first use."""
+        # Keep the sort: a set reached by difference iterates differently from one built directly, which
+        # reaches random_point and makes a seeded game unreproducible.
         return tuple(sorted(self._tiles))
 
     def __iter__(self) -> Iterator[Tile]:
@@ -371,6 +370,8 @@ class TileSet(Area):
         The nearest tile is found by its center, so a tile whose edge is marginally closer can lose to one
         whose center is nearer.
         """
+        if not self._tiles:
+            raise ValueError("an empty tile set has no closest point")
         position = Point(coordinates(point)[:2])
         if Tile.containing(position) in self._tiles:
             return position, 0.0
@@ -380,10 +381,14 @@ class TileSet(Area):
 
     def random_point(self) -> Point:
         """A point drawn uniformly from the covered ground."""
+        if not self._tiles:
+            raise ValueError("an empty tile set has no points to draw from")
         return random.choice(self._ordered).random_point()
 
     def bounding_rectangle(self) -> Rectangle:
         """The smallest rectangle containing every covered tile."""
+        if not self._tiles:
+            raise ValueError("an empty tile set has no bounding rectangle")
         left = min(tile.x for tile in self._tiles)
         bottom = min(tile.y for tile in self._tiles)
         right = max(tile.x for tile in self._tiles) + 1
@@ -398,25 +403,19 @@ class TileSet(Area):
         """The tiles shifted by `offset`, snapped back onto the tile grid."""
         return TileSet(tile.translated(offset) for tile in self._tiles)
 
-    def filter(self, predicate: Callable[[Tile], bool]) -> TileSet | None:
-        """The tiles satisfying `predicate`; `None` if that leaves nothing."""
-        tiles = [tile for tile in self._tiles if predicate(tile)]
-        if not tiles:
-            return None
-        return TileSet(tiles)
+    def filter(self, predicate: Callable[[Tile], bool]) -> TileSet:
+        """The tiles satisfying `predicate`."""
+        return TileSet(tile for tile in self._tiles if predicate(tile))
 
     def __add__(self, other: Area) -> TileSet:
         if not isinstance(other, Area):
             return NotImplemented
         return TileSet(self._tiles.union(other.tiles()))
 
-    def __sub__(self, other: Area) -> TileSet | None:
+    def __sub__(self, other: Area) -> TileSet:
         if not isinstance(other, Area):
             return NotImplemented
-        tiles = self._tiles.difference(other.tiles())
-        if not tiles:
-            return None
-        return TileSet(tiles)
+        return TileSet(self._tiles.difference(other.tiles()))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TileSet):
@@ -427,4 +426,6 @@ class TileSet(Area):
         return hash(self._tiles)
 
     def __repr__(self) -> str:
+        if not self._tiles:
+            return "TileSet(empty)"
         return f"TileSet({len(self._tiles)} tiles around {self.center})"

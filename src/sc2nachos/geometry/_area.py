@@ -11,7 +11,11 @@ if TYPE_CHECKING:
 
 
 class Area(ABC):
-    """A patch of ground: somewhere to attack, to scout, or to filter positions by."""
+    """A patch of ground: somewhere to attack, to scout, or to filter positions by.
+
+    An area may cover nothing. `center`, `random_point`, `closest_point_to` and `bounding_rectangle` raise
+    `ValueError` on one that does; the rest answer normally.
+    """
 
     # Without this every subclass carries a __dict__, whatever slots it declares itself.
     __slots__ = ()
@@ -28,18 +32,11 @@ class Area(ABC):
 
     @abstractmethod
     def random_point(self) -> Point:
-        """A point drawn uniformly from the area.
-
-        A method rather than a property: each call consumes randomness and answers differently.
-        """
+        """A point drawn uniformly from the area."""
 
     @abstractmethod
     def __contains__(self, point: PointLike) -> bool:
-        """Whether a point lies inside, written `point in area`.
-
-        Raises `TypeError` on anything but a point: `in` has no way to signal an unsupported operand, so an
-        unusable one would silently answer False.
-        """
+        """Whether a point lies inside, written `point in area`. Raises `TypeError` on anything else."""
 
     @abstractmethod
     def translated(self, offset: PointLike) -> Self:
@@ -47,7 +44,10 @@ class Area(ABC):
 
     @abstractmethod
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
-        """The point of the area nearest to `point`, and the distance to it."""
+        """The point of the area nearest to `point`, and the distance to it.
+
+        May lie on an edge the area excludes, so it is not necessarily in the area.
+        """
 
     @abstractmethod
     def bounding_rectangle(self) -> Rectangle:
@@ -55,4 +55,4 @@ class Area(ABC):
 
     @abstractmethod
     def tiles(self) -> TileSet:
-        """The area as the set of grid tiles it covers."""
+        """Every tile whose center lies in the area."""

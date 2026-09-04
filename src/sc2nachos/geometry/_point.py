@@ -37,8 +37,7 @@ SCALAR_TYPES = (int, float, numbers.Real)
 def coordinates(value: PointLike) -> Coordinates:
     """The coordinate tuple of a point, or of anything that has a `.position`.
 
-    `.position` is consulted before the raw tuple so that a type storing something other than its position --
-    a `Tile`, which holds its grid address -- reports where it actually sits.
+    `.position` is consulted before the raw tuple.
     """
     if isinstance(value, _PointND):
         return value
@@ -88,10 +87,7 @@ class _PointND(tuple[float, ...]):
         return self / length
 
     def distance_to(self, other: PointLike) -> float:
-        """Distance to another point, on the ground plane.
-
-        StarCraft ranges ignore height, so a unit on a cliff is in range of one below it.
-        """
+        """Distance to another point, on the ground plane."""
         position = coordinates(other)
         return math.hypot(self[0] - position[0], self[1] - position[1])
 
