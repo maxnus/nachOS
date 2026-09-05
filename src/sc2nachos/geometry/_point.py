@@ -79,6 +79,16 @@ class _PointND(tuple[float, ...]):
         return math.hypot(self[0], self[1])
 
     @property
+    def length_squared(self) -> float:
+        """Squared distance from the origin, for when only the ordering matters."""
+        return self[0] ** 2 + self[1] ** 2
+
+    def dot(self, other: PointLike) -> float:
+        """The dot product on the ground plane."""
+        position = coordinates(other)
+        return self[0] * position[0] + self[1] * position[1]
+
+    @property
     def normalized(self) -> Self:
         """The point scaled to unit length on the ground plane."""
         length = self.length
@@ -138,6 +148,17 @@ class _PointND(tuple[float, ...]):
         dx, dy = self[0] - pivot[0], self[1] - pivot[1]
         rotated = (pivot[0] + cos * dx - sin * dy, pivot[1] + sin * dx + cos * dy)
         return type(self)(rotated + tuple(self[2:]))
+
+    def snapped(self, *, step: float) -> Self:
+        """The nearest point on a lattice of `step` tiles. Height is carried through.
+
+        Each axis rounds on its own, so `step=0.5` gives the nearest of a tile's four corners, its four
+        edge midpoints and its center, and `step=1` gives the nearest corner rather than the nearest center.
+        """
+        if step <= 0:
+            raise ValueError(f"a lattice step must be positive, got {step}")
+        snapped = (round(self[0] / step) * step, round(self[1] / step) * step)
+        return type(self)(snapped + tuple(self[2:]))
 
     def closest[T: PointLike](self, points: Iterable[T]) -> T:
         """The nearest of the given points, returned as it was passed in."""

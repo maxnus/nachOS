@@ -76,6 +76,42 @@ class TestPoint2:
         assert isinstance(result, Point)
         assert len(result) == 2, "tuple.__add__ would have concatenated into a 4-tuple"
 
+    @pytest.mark.parametrize(
+        ("probe", "expected", "kind"),
+        [
+            ((3.05, 4.05), (3.0, 4.0), "tile corner"),
+            ((3.45, 4.55), (3.5, 4.5), "tile center"),
+            ((3.05, 4.55), (3.0, 4.5), "edge midpoint"),
+            ((3.26, 4.24), (3.5, 4.0), "edge midpoint"),
+        ],
+    )
+    def test_snapped_takes_the_nearest_of_the_nine(
+        self, probe: tuple[float, float], expected: tuple[float, float], kind: str
+    ) -> None:
+        """A half-tile lattice is corners, edge midpoints and centers -- not centers alone."""
+        assert Point(probe).snapped(step=0.5) == expected, kind
+
+    def test_snapped_to_whole_tiles_gives_corners_not_centers(self) -> None:
+        assert Point((3.4, 4.6)).snapped(step=1) == (3.0, 5.0)
+
+    def test_snapped_rejects_a_step_that_is_not_positive(self) -> None:
+        with pytest.raises(ValueError, match="must be positive"):
+            _ = Point((1.0, 2.0)).snapped(step=0)
+
+    def test_length_squared_agrees_with_length(self) -> None:
+        point = Point((3.0, 4.0))
+        assert point.length_squared == 25.0
+        assert point.length_squared == pytest.approx(point.length**2)
+
+    def test_dot(self) -> None:
+        assert Point((3.0, 4.0)).dot((2.0, 1.0)) == 10.0
+        assert Point((1.0, 0.0)).dot((0.0, 1.0)) == 0.0
+
+    def test_dot_with_itself_is_length_squared(self) -> None:
+        """Two of the three call sites the old free function had were dot(d, d)."""
+        point = Point((1.5, -2.5))
+        assert point.dot(point) == point.length_squared
+
     def test_length_and_normalized(self) -> None:
         assert Point((3, 4)).length == 5
         assert Point((3, 4)).normalized == pytest.approx((0.6, 0.8))
@@ -147,6 +183,13 @@ class TestPoint3:
     def test_rotate_keeps_height(self) -> None:
         rotated = Point3D((1, 0, 9)).rotated(math.pi / 2)
         assert rotated == pytest.approx((0, 1, 9))
+
+    def test_snapped_carries_height_through(self) -> None:
+        assert Point3D((3.26, 4.24, 12.75)).snapped(step=0.5) == (3.5, 4.0, 12.75)
+
+    def test_dot_and_length_squared_use_the_ground_plane(self) -> None:
+        assert Point3D((3.0, 4.0, 99.0)).length_squared == 25.0
+        assert Point3D((3.0, 4.0, 99.0)).dot(Point3D((2.0, 1.0, 50.0))) == 10.0
 
     def test_distance_uses_the_ground_plane(self) -> None:
         """Range checks in StarCraft are horizontal, so height must not enter the distance."""
