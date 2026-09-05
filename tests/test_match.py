@@ -1,0 +1,36 @@
+"""The vocabulary of a match."""
+
+import pytest
+from google.protobuf.descriptor import EnumDescriptor
+from s2clientprotocol import common_pb2, sc2api_pb2
+
+from sc2nachos.match import AIBuild, Difficulty, Race, Result
+
+
+@pytest.mark.parametrize(
+    ("enum", "descriptor"),
+    [
+        (Race, common_pb2.Race.DESCRIPTOR),
+        (Result, sc2api_pb2.Result.DESCRIPTOR),
+        (Difficulty, sc2api_pb2.Difficulty.DESCRIPTOR),
+        (AIBuild, sc2api_pb2.AIBuild.DESCRIPTOR),
+    ],
+)
+def test_covers_every_value_the_protocol_defines(enum: type[Race], descriptor: EnumDescriptor) -> None:
+    """Names are ours, values are the game's: a value the protocol adds must not go missing here."""
+    protocol = {value.number for value in descriptor.values}
+    assert {member.value for member in enum} == protocol
+
+
+def test_members_are_the_integers_the_protocol_uses() -> None:
+    assert Race.TERRAN == 1
+    assert Result.VICTORY == 1
+    assert Difficulty.CHEAT_INSANE == 10
+    assert AIBuild.MACRO == 5
+
+
+def test_they_print_as_names_not_numbers() -> None:
+    """IntEnum formats as a bare number since 3.11, which makes logs unreadable."""
+    assert str(Race.TERRAN) == "Race.TERRAN"
+    assert f"{Result.VICTORY}" == "Result.VICTORY"
+    assert f"{Race.TERRAN:d}" == "1"

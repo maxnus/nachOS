@@ -1,4 +1,4 @@
-"""Base class for the game's identifier enums."""
+"""Base class for the package's enums."""
 
 from enum import IntEnum
 

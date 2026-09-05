@@ -2,8 +2,8 @@
 
 import pytest
 
+from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
-from sc2nachos.ids._base import ReadableIntEnum
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawEffectId, RawUnitTypeId, RawUpgradeId
 
 CURATED = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)

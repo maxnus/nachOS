@@ -4,7 +4,7 @@ Hand-maintained: filtered to what multiplayer needs, named for readability. Each
 catalog member, never a literal id. Unknown ids raise.
 """
 
-from sc2nachos.ids._base import ReadableIntEnum
+from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.ids.raw import RawUnitTypeId
 
 
