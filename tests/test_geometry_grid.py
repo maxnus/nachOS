@@ -223,6 +223,61 @@ class TestComparisons:
         assert not grid.all()
 
 
+class TestDerivedGrids:
+    def test_cropped_keeps_the_tiles_it_covers(self) -> None:
+        grid = playable_grid()
+        part = grid.cropped(Rectangle(6, 8, 3, 2))
+        assert part.origin == Tile(6, 8)
+        assert (part.width, part.height) == (3, 2)
+        assert part[Tile(6, 8)] == grid[Tile(6, 8)]
+
+    def test_cropped_clips_to_the_grid(self) -> None:
+        grid = playable_grid()
+        part = grid.cropped(Rectangle(0, 0, 8, 10))
+        assert part.origin == grid.origin
+        assert (part.width, part.height) == (4, 4)
+
+    def test_cropped_is_independent(self) -> None:
+        """The old get_subfield returned a view, so writing to it reached back into the parent."""
+        grid = playable_grid()
+        part = grid.cropped(Rectangle(6, 8, 3, 2))
+        part[Tile(6, 8)] = -1.0
+        assert grid[Tile(6, 8)] != -1.0
+
+    def test_distance_transform(self) -> None:
+        """openness, as gamemap builds it from the pathing grid."""
+        pathable = Grid.zeros(5, 5, dtype=bool)
+        pathable[Rectangle(1, 1, 3, 3)] = True
+        distances = pathable.distance_transform()
+        assert distances[Tile(2, 2)] == pytest.approx(2.0)
+        assert distances[Tile(1, 1)] == pytest.approx(1.0)
+        assert distances[Tile(0, 0)] == 0.0
+
+    def test_smoothed_spreads_a_spike_without_moving_it(self) -> None:
+        grid = Grid.zeros(9, 9)
+        grid[Tile(4, 4)] = 100.0
+        blurred = grid.smoothed(1.0)
+        assert blurred.argmax() == Tile(4, 4)
+        assert blurred[Tile(4, 4)] < 100.0
+        assert blurred[Tile(3, 4)] > 0.0
+        assert blurred.sum() == pytest.approx(100.0, rel=1e-3)
+
+    def test_smoothed_within_a_region_is_not_dragged_down_by_what_is_outside(self) -> None:
+        grid = Grid.zeros(9, 9)
+        region = Grid.zeros(9, 9, dtype=bool)
+        region[Rectangle(0, 0, 5, 9)] = True
+        grid[region] = 10.0  # ten inside the region, zero outside it
+        plain = grid.smoothed(2.0)
+        weighted = grid.smoothed(2.0, within=region)
+        edge = Tile(4, 4)  # the region's last column
+        assert plain[edge] < 10.0  # pulled toward the zeros outside
+        assert weighted[edge] == pytest.approx(10.0)
+
+    def test_smoothed_refuses_a_region_over_other_tiles(self) -> None:
+        with pytest.raises(ValueError, match="same tiles"):
+            Grid.zeros(4, 4).smoothed(1.0, within=Grid.zeros(4, 4, origin=Tile(9, 9), dtype=bool))
+
+
 class TestSummaries:
     def test_summing_a_boolean_grid_counts_its_true_tiles(self) -> None:
         grid = Grid.zeros(4, 4, dtype=bool)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, final, overload
 
 import numpy
+import scipy.ndimage
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._point import coordinates
@@ -188,12 +189,40 @@ class Grid[T: float]:
         """The larger of the two values on each tile."""
         return self._combine(other, numpy.maximum)
 
+    def cropped(self, rectangle: Rectangle) -> Grid[T]:
+        """An independent grid over the tiles `rectangle` covers, clipped to the ones this grid holds."""
+        x, y = self._slices(rectangle)
+        origin = Tile(self._origin[0] + x.start, self._origin[1] + y.start)
+        return Grid(self._data[x, y].copy(), origin=origin)
+
     def distance_from(self, point: PointLike) -> Grid[float]:
         """The distance from each tile's center to `point`."""
         position = coordinates(point)
         xs = numpy.arange(self.width) + self._origin[0] + 0.5 - position[0]
         ys = numpy.arange(self.height) + self._origin[1] + 0.5 - position[1]
         return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin)
+
+    def distance_transform(self: Grid[bool]) -> Grid[float]:
+        """For each true tile, the distance to the nearest false one; zero on a false tile."""
+        distances = scipy.ndimage.distance_transform_edt(self._data, return_indices=False)
+        return Grid(numpy.asarray(distances), origin=self._origin)
+
+    def smoothed(self, sigma: float, *, within: Grid[bool] | None = None) -> Grid[float]:
+        """A Gaussian blur of the values, `sigma` measured in tiles.
+
+        Given `within`, only those tiles contribute and the result is renormalized, so values near the edge
+        of the region are not dragged down by the tiles outside it. A tile no contributor reaches keeps its
+        own value.
+        """
+        values = self._data.astype(float)
+        if within is None:
+            return Grid(scipy.ndimage.gaussian_filter(values, sigma=sigma), origin=self._origin)
+        weights = self._mask(within).astype(float)
+        numerator = scipy.ndimage.gaussian_filter(values * weights, sigma=sigma)
+        denominator = scipy.ndimage.gaussian_filter(weights, sigma=sigma)
+        blurred = values.copy()
+        numpy.divide(numerator, denominator, out=blurred, where=denominator > 0)
+        return Grid(blurred, origin=self._origin)
 
     # --- Summaries
 
