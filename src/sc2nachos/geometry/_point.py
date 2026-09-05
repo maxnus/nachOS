@@ -6,7 +6,7 @@ import math
 import numbers
 import operator
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Protocol, Self, Union
+from typing import TYPE_CHECKING, Protocol, Self, Union, final
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -210,6 +210,7 @@ class _PointND(tuple[float, ...]):
         return f"{type(self).__name__}({tuple(self)})"
 
 
+@final
 class Point(_PointND, tuple[float, float]):
     """An immutable 2D point, constructed from an iterable: `Point((3, 4))`.
 
@@ -240,6 +241,7 @@ class Point(_PointND, tuple[float, float]):
         return super().__sub__(other)
 
 
+@final
 class Point3D(_PointND, tuple[float, float, float]):
     """An immutable 3D point, used for terrain height and debug drawing."""
 

@@ -16,7 +16,7 @@ import numpy
 from scipy.spatial import KDTree
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, coordinates
+from sc2nachos.geometry._point import Point, _PointND, coordinates
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -29,9 +29,9 @@ if TYPE_CHECKING:
 
 @final
 class Tile(tuple[int, int], Area):
-    """One square of the map grid, addressed by the integer coordinates of its lower left corner.
+    """One square of the map, addressed by the integer coordinates of its lower left corner.
 
-    The tuple holds the grid address. Used as a point it reads as its `center`.
+    The tuple holds the tile address. Used as a point it reads as its `center`.
     """
 
     __slots__ = ()
@@ -42,8 +42,8 @@ class Tile(tuple[int, int], Area):
     @classmethod
     def containing(cls, point: PointLike) -> Self:
         """The tile a point falls in."""
-        # The Point fast path skips the general dispatch; this runs once per unit per grid lookup.
-        if type(point) is Point:
+        # Skips the general dispatch; this runs once per unit per grid lookup.
+        if isinstance(point, _PointND):
             return cls(math.floor(point[0]), math.floor(point[1]))
         position = coordinates(point)
         return cls(math.floor(position[0]), math.floor(position[1]))
