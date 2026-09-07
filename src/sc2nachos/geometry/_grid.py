@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, final, overload
+from typing import TYPE_CHECKING, cast, final, overload
 
 import numpy
 import scipy.ndimage
@@ -35,29 +35,39 @@ class Grid[T: float]:
     area reaching past the edge is clipped to the tiles the grid holds; a point outside it raises `IndexError`.
     """
 
-    __slots__ = ("_data", "_origin")
+    __slots__ = ("_data", "_origin", "_outside")
 
     _data: ndarray
     _origin: Tile
+    _outside: T | None
 
     # --- Construction
 
-    def __init__(self, data: ndarray, *, origin: Tile = _ORIGIN) -> None:
-        """A grid holding `data`, whose `[0, 0]` entry is the tile at `origin`."""
+    def __init__(self, data: ndarray, *, origin: Tile = _ORIGIN, outside: T | None = None) -> None:
+        """A grid holding `data`, whose `[0, 0]` entry is the tile at `origin`.
+
+        `outside` is what reading a point beyond the grid answers. Without it such a read raises, which is
+        right for a grid with no meaning off its own ground -- terrain height has none -- and wrong for one
+        that does: nothing stands on ground the grid does not cover, so a threat grid answers zero there.
+        Writing beyond the grid always raises.
+        """
         if data.ndim != 2:
             raise ValueError(f"a grid is two-dimensional, got {data.ndim} dimensions")
         self._data = data
         self._origin = origin
+        self._outside = outside
 
     @classmethod
-    def zeros(cls, width: int, height: int, *, origin: Tile = _ORIGIN, dtype: type[T] = float) -> Grid[T]:
+    def zeros(
+        cls, width: int, height: int, *, origin: Tile = _ORIGIN, dtype: type[T] = float, outside: T | None = None
+    ) -> Grid[T]:
         """A grid of `width` by `height` tiles, filled with zeros."""
-        return Grid(numpy.zeros((width, height), dtype=dtype), origin=origin)
+        return Grid(numpy.zeros((width, height), dtype=dtype), origin=origin, outside=outside)
 
     @classmethod
-    def like[U: float](cls, other: Grid[U], *, dtype: type[T] = float) -> Grid[T]:
+    def like[U: float](cls, other: Grid[U], *, dtype: type[T] = float, outside: T | None = None) -> Grid[T]:
         """A grid of zeros covering the same tiles as `other`."""
-        return Grid(numpy.zeros(other._data.shape, dtype=dtype), origin=other._origin)
+        return Grid(numpy.zeros(other._data.shape, dtype=dtype), origin=other._origin, outside=outside)
 
     # --- The ground it covers
 
@@ -107,6 +117,29 @@ class Grid[T: float]:
             raise IndexError(f"{index} lies outside a {self.width} by {self.height} grid")
         return Tile(self._origin[0] + x, self._origin[1] + y)
 
+    @property
+    def outside(self) -> T | None:
+        """What a read beyond the grid answers, or None if one raises."""
+        return self._outside
+
+    def with_outside(self, value: T | None) -> Grid[T]:
+        """The same grid, reading `value` beyond its edge. Shares the data rather than copying it.
+
+        For a grid whose off-grid answer only its producer knows, after operations that cannot carry one.
+        """
+        return Grid(self._data, origin=self._origin, outside=value)
+
+    def _value_at(self, point: PointLike) -> T:
+        """The value at `point`, or `outside` for a point the grid does not cover."""
+        tile = Tile.containing(point)
+        x = tile[0] - self._origin[0]
+        y = tile[1] - self._origin[1]
+        if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
+            return self._data.item(x, y)
+        if self._outside is None:
+            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
+        return self._outside
+
     def _aligned(self, other: Grid) -> ndarray:
         """The values of `other`, which must cover the same tiles as this grid."""
         if not isinstance(other, Grid):
@@ -133,14 +166,14 @@ class Grid[T: float]:
         # Points first, and by tuple: `Tile` is the only `Area` that is one, and it addresses a single
         # tile like any other point. A miss here is cheap, where a miss against an `Area` subclass is not.
         if isinstance(key, tuple):
-            return self._data.item(self.index_of(key))
+            return self._value_at(key)
         if isinstance(key, Rectangle):
             return self._data[self._slices(key)]
         if isinstance(key, Area):
             return self._data[self._scatter(key)]
         if isinstance(key, Grid):
             return self._data[self._mask(key)]
-        return self._data.item(self.index_of(key))
+        return self._value_at(key)
 
     def __setitem__(self, key: PointLike | Area | Grid[bool], value: T | ndarray) -> None:
         """Writes a value at a point, over an area, or over the tiles a mask selects."""
@@ -190,7 +223,7 @@ class Grid[T: float]:
 
     def copy(self) -> Grid[T]:
         """An independent grid holding the same values."""
-        return Grid(self._data.copy(), origin=self._origin)
+        return Grid(self._data.copy(), origin=self._origin, outside=self._outside)
 
     def where(self, condition: Grid[bool], other: T | Grid[T]) -> Grid[T]:
         """This grid where `condition` holds, and `other` everywhere else."""
@@ -283,7 +316,24 @@ class Grid[T: float]:
         else:
             return NotImplemented
         left, right = (values, self._data) if flip else (self._data, values)
-        return Grid(op(left, right), origin=self._origin)
+        return Grid(op(left, right), origin=self._origin, outside=self._outside_after(other, op, flip=flip))
+
+    def _outside_after(self, other: object, op: Callable[..., ndarray], *, flip: bool) -> T | None:
+        """The off-grid value the result carries, or None if either operand has none.
+
+        A pointwise operation answers off the grid the way it answers on it, so the same `op` runs on the
+        operands' own off-grid values.
+        """
+        if self._outside is None:
+            return None
+        if isinstance(other, Grid):
+            if other._outside is None:
+                return None
+            value = other._outside
+        else:
+            value = other
+        left, right = (value, self._outside) if flip else (self._outside, value)
+        return op(left, right).item()
 
     def __add__(self, other: Grid[T] | T) -> Grid[T]:
         return self._combine(other, numpy.add)
@@ -307,13 +357,20 @@ class Grid[T: float]:
         return self._combine(other, numpy.divide)
 
     def __neg__(self) -> Grid[T]:
-        return Grid(-self._data, origin=self._origin)
+        # Negating a `T` bound to float widens to float; at runtime the type is unchanged.
+        outside = None if self._outside is None else cast("T", -self._outside)
+        return Grid(-self._data, origin=self._origin, outside=outside)
 
     def __abs__(self) -> Grid[T]:
-        return Grid(abs(self._data), origin=self._origin)
+        outside = None if self._outside is None else cast("T", abs(self._outside))
+        return Grid(abs(self._data), origin=self._origin, outside=outside)
 
     def __invert__(self: Grid[bool]) -> Grid[bool]:
-        return Grid(numpy.logical_not(self._data), origin=self._origin)
+        return Grid(
+            numpy.logical_not(self._data),
+            origin=self._origin,
+            outside=None if self._outside is None else not self._outside,
+        )
 
     def __and__(self: Grid[bool], other: Grid[bool] | bool) -> Grid[bool]:
         return self._combine(other, numpy.logical_and)
