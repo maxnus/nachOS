@@ -40,11 +40,13 @@ class Tile(tuple[int, int], Area):
         return super().__new__(cls, (x, y))
 
     @classmethod
-    def containing(cls, point: PointLike) -> Self:
-        """The tile a point falls in."""
+    def containing(cls, point: PointLike | Tile) -> Self:
+        """The tile a point falls in, or the tile itself."""
         # Skips the general dispatch; this runs once per unit per grid lookup.
         if isinstance(point, _PointND):
             return cls(math.floor(point[0]), math.floor(point[1]))
+        if isinstance(point, Tile):
+            return cls(point[0], point[1])
         position = coordinates(point)
         return cls(math.floor(position[0]), math.floor(position[1]))
 
@@ -62,11 +64,6 @@ class Tile(tuple[int, int], Area):
     def center(self) -> Point:
         """Where a unit standing on this tile sits."""
         return Point((self[0] + 0.5, self[1] + 0.5))
-
-    @property
-    def position(self) -> Point:
-        """The tile's center, so a tile used as a point measures from where a unit would stand."""
-        return self.center
 
     @property
     def area(self) -> float:

@@ -6,7 +6,10 @@ import math
 import numbers
 import operator
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Protocol, Self, Union, final
+from typing import TYPE_CHECKING, Self, Union, final
+
+# Imported for the check in `coordinates`. Safe at runtime: `_area` only imports this module for annotations.
+from sc2nachos.geometry._area import Area
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -14,19 +17,12 @@ if TYPE_CHECKING:
     from s2clientprotocol import common_pb2
 
 
-class HasPosition(Protocol):
-    """Anything that knows where it is — a unit, a structure, an expansion."""
-
-    @property
-    def position(self) -> Point: ...
-
-
-# Coordinates on the ground plane, or on it with a height. Anything a point can be, except the indirection
-# through `.position`, which `coordinates` resolves.
-Coordinates = Union["Point", "Point3D", tuple[float, float], tuple[float, float, float]]
-
-# A point, a plain coordinate pair or triple, or anything with a `.position`.
-PointLike = Coordinates | HasPosition
+# Coordinates on the ground plane, or on it with a height: anything a point *is*.
+#
+# Something that merely *has* a point is deliberately not one, and the caller names the point it means. An area
+# has a `.center`; a unit has a `.position`, read at that moment — a shape built straight from a moving object
+# would snapshot it and then silently stop following it.
+PointLike = Union["Point", "Point3D", tuple[float, float], tuple[float, float, float]]
 
 
 # Scalars accepted by point arithmetic. `numbers.Real` catches numpy scalars, which subclass neither `int` nor
@@ -34,19 +30,20 @@ PointLike = Coordinates | HasPosition
 SCALAR_TYPES = (int, float, numbers.Real)
 
 
-def coordinates(value: PointLike) -> Coordinates:
-    """The coordinate tuple of a point, or of anything that has a `.position`.
+def coordinates(value: PointLike) -> PointLike:
+    """`value` itself, once it is known to be coordinates. A caller that is not type-checked fails here.
 
-    `.position` is consulted before the raw tuple.
+    A `Tile` is rejected despite being a coordinate pair: its address is not the point it stands for, so
+    reading it as one would quietly measure from the tile's corner.
     """
-    if isinstance(value, _PointND):
+    # Points first: the common case, and a concrete class is far quicker to test than an ABC.
+    if isinstance(value, _PointND) or type(value) is tuple:
         return value
-    position = getattr(value, "position", None)
-    if position is not None:
-        return position
+    if isinstance(value, Area):
+        raise TypeError(f"a {type(value).__name__} is an area, not a point — pass its .center")
     if isinstance(value, tuple):
         return value
-    raise TypeError(f"expected a point or something with a .position, got {type(value).__name__}")
+    raise TypeError(f"expected a point or a coordinate tuple, got {type(value).__name__}")
 
 
 class _PointND(tuple[float, ...]):
