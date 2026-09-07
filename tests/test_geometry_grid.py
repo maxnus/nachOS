@@ -65,6 +65,86 @@ class TestAddressing:
             _ = grid[(3.5, 7.0)]
 
 
+class TestOutside:
+    def test_a_point_off_the_grid_raises_when_nothing_was_declared(self) -> None:
+        with pytest.raises(IndexError, match="lies outside"):
+            _ = playable_grid()[Point((100.5, 100.5))]
+
+    def test_a_declared_value_answers_for_ground_the_grid_does_not_cover(self) -> None:
+        grid = Grid(numpy.ones((4, 4)), origin=Tile(10, 10), outside=0.0)
+        assert grid[Point((11.5, 11.5))] == 1.0
+        assert grid[Point((100.5, 100.5))] == 0.0
+        assert grid[Tile(-5, -5)] == 0.0
+
+    def test_a_false_value_still_answers(self) -> None:
+        # `outside` is absent only when None, so False and 0 are answers like any other.
+        grid = Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(10, 10), outside=False)
+        assert grid[Point((100.5, 100.5))] is False
+
+    def test_writing_off_the_grid_always_raises(self) -> None:
+        grid = Grid(numpy.ones((4, 4)), origin=Tile(10, 10), outside=0.0)
+        with pytest.raises(IndexError, match="lies outside"):
+            grid[Point((100.5, 100.5))] = 5.0
+
+    def test_index_of_still_raises_since_no_index_lies_outside(self) -> None:
+        grid = Grid(numpy.ones((4, 4)), origin=Tile(10, 10), outside=0.0)
+        with pytest.raises(IndexError, match="lies outside"):
+            grid.index_of(Point((100.5, 100.5)))
+
+    def test_with_outside_shares_the_data(self) -> None:
+        grid = Grid(numpy.ones((4, 4)), origin=Tile(10, 10))
+        lenient = grid.with_outside(0.0)
+        assert lenient[Point((100.5, 100.5))] == 0.0
+        assert grid.outside is None
+        grid[Tile(10, 10)] = 9.0
+        assert lenient[Tile(10, 10)] == 9.0
+
+    def test_with_outside_none_takes_it_away(self) -> None:
+        grid = Grid(numpy.ones((4, 4)), origin=Tile(10, 10), outside=0.0)
+        with pytest.raises(IndexError, match="lies outside"):
+            _ = grid.with_outside(None)[Point((100.5, 100.5))]
+
+
+class TestOutsidePropagation:
+    def grids(self) -> tuple[Grid[float], Grid[float]]:
+        return (
+            Grid(numpy.ones((4, 4)), origin=Tile(0, 0), outside=2.0),
+            Grid(numpy.ones((4, 4)), origin=Tile(0, 0), outside=3.0),
+        )
+
+    def test_arithmetic_runs_the_same_operation_on_the_outside_value(self) -> None:
+        left, right = self.grids()
+        assert (left + right).outside == 5.0
+        assert (left - right).outside == -1.0
+        assert (left * right).outside == 6.0
+
+    def test_a_scalar_operand_is_used_as_it_stands(self) -> None:
+        left, _ = self.grids()
+        assert (left + 10).outside == 12.0
+        assert (10 - left).outside == 8.0
+
+    def test_a_comparison_carries_the_answer_not_the_value(self) -> None:
+        left, _ = self.grids()
+        assert (left <= 5).outside is True
+        assert (left > 5).outside is False
+
+    def test_an_operand_without_one_leaves_the_result_without_one(self) -> None:
+        left, _ = self.grids()
+        bare = Grid(numpy.ones((4, 4)), origin=Tile(0, 0))
+        assert (left + bare).outside is None
+        assert (bare + left).outside is None
+
+    def test_negation_and_inversion_follow(self) -> None:
+        left, _ = self.grids()
+        assert (-left).outside == -2.0
+        assert abs(-left).outside == 2.0
+        assert (~Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0), outside=False)).outside is True
+
+    def test_copy_keeps_it(self) -> None:
+        left, _ = self.grids()
+        assert left.copy().outside == 2.0
+
+
 class TestArrayIndices:
     """`values` goes to code that speaks array indices — pathfinding, scipy — which needs both directions."""
 
