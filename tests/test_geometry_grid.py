@@ -65,6 +65,33 @@ class TestAddressing:
             _ = grid[(3.5, 7.0)]
 
 
+class TestArrayIndices:
+    """`values` goes to code that speaks array indices — pathfinding, scipy — which needs both directions."""
+
+    def test_index_of_is_relative_to_the_origin(self) -> None:
+        grid = playable_grid()
+        assert grid.index_of(grid.origin) == (0, 0)
+        assert grid.index_of(Point((5.7, 7.3))) == (1, 1)
+        assert grid.values[grid.index_of(Point((5.7, 7.3)))] == grid[Point((5.7, 7.3))]
+
+    def test_tile_at_inverts_index_of(self) -> None:
+        grid = playable_grid()
+        for point in (Point((4.0, 6.0)), Point((5.7, 7.3)), Point((13.9, 13.9))):
+            assert grid.tile_at(grid.index_of(point)) == Tile.containing(point)
+
+    def test_a_point_off_the_grid_raises_rather_than_going_negative(self) -> None:
+        """An index the caller hands on is not bounds-checked again: pathfinding answers inf for every tile."""
+        grid = playable_grid()
+        with pytest.raises(IndexError, match="lies outside"):
+            _ = grid.index_of(Point((1.0, 7.0)))
+
+    def test_an_index_off_the_array_raises(self) -> None:
+        grid = playable_grid()
+        for index in ((-1, 0), (10, 0), (0, 8)):
+            with pytest.raises(IndexError, match="lies outside"):
+                _ = grid.tile_at(index)
+
+
 class TestAreaAccess:
     def test_a_rectangle_reads_a_plane_and_an_area_reads_a_line(self) -> None:
         """A circle is not rectangular, so its values cannot come back laid out in a grid."""

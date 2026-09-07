@@ -50,11 +50,6 @@ class TestPoint2:
         point = Point((10, 20))
         assert point + Point((1, 2)) == point + Point3D((1, 2, 0)).ground
         assert point - (1, 2) == point + (-1, -2)
-
-        class Unit:
-            position = Point((1, 2))
-
-        assert point + Unit() == (11, 22), "a positioned object takes the general path"
         assert point + 5 == (15, 25), "a scalar takes the general path"
 
     def test_reflected_operators_beat_tuple_semantics(self) -> None:
@@ -266,37 +261,30 @@ class TestNumpyScalars:
 class TestUnsupportedOperands:
     def test_error_names_the_type(self) -> None:
         """Previously an operand with no `.position` produced a confusing AttributeError."""
-        with pytest.raises(TypeError, match="expected a point or something with a .position, got str"):
+        with pytest.raises(TypeError, match="expected a point or a coordinate tuple, got str"):
             # Statically rejected too; this covers callers that are not type-checked.
             _ = Point((1, 2)) + "banana"  # pyright: ignore[reportOperatorIssue]
 
 
-class TestPositionedObjects:
-    """Geometry accepts anything with a `.position`, so a unit works wherever a point does."""
+class TestPointsAreCoordinates:
+    """A point is coordinates, not anything that merely knows where it stands.
 
-    class Unit:
-        def __init__(self, x: float, y: float) -> None:
-            self.position = Point((x, y))
+    Something whose position changes under you is not a point: the caller writes `.position` to say they meant
+    where it is now. `Tile` is the one exception, and only because a tile's address is not the point it stands
+    for; `TestTile` pins that.
+    """
 
-    def test_distance_to_a_positioned_object(self) -> None:
-        assert Point((0, 0)).distance_to(self.Unit(3, 4)) == 5
-        assert Point((0, 0)).distance_to_squared(self.Unit(3, 4)) == 25
-        assert Point((0, 0)).is_closer_than(6, self.Unit(3, 4))
+    def test_a_position_written_out_is_a_point(self) -> None:
+        class Unit:
+            position = Point((3, 4))
 
-    def test_towards_a_positioned_object(self) -> None:
-        assert Point((0, 0)).towards(self.Unit(10, 0), 3) == (3, 0)
+        assert Point((0, 0)).distance_to(Unit().position) == 5
 
     def test_closest_returns_the_object_that_was_passed_in(self) -> None:
-        """Not a converted point â€” so a unit comes back as a unit and a Point3D keeps its height."""
-        far, near = self.Unit(10, 0), self.Unit(1, 1)
+        """Not a converted point, so a Point3D comes back with its height."""
+        far, near = Point3D((10, 0, 5)), Point3D((1, 1, 5))
         assert Point((0, 0)).closest([far, near]) is near
         assert Point((0, 0)).furthest([far, near]) is far
-
-        points = [Point3D((10, 0, 5)), Point3D((1, 1, 5))]
-        assert Point((0, 0)).closest(points) == (1, 1, 5)
-
-    def test_rectangle_contains_a_positioned_object(self) -> None:
-        assert self.Unit(5, 5) in Rectangle(0, 0, 10, 10)
 
 
 class TestRectangle:
@@ -430,15 +418,12 @@ class TestTile:
         assert Tile.containing(Point((1.9, 2.9))) == Tile(1, 2), "rounding would give Tile(2, 3)"
         assert Tile.containing((-0.5, -0.5)) == Tile(-1, -1), "floors rather than truncating"
 
-    def test_containing_takes_anything_with_a_position(self) -> None:
-        assert Tile.containing(Point3D((1.4, 2.6, 9.9))) == Tile(1, 2), "height is dropped"
-        assert Tile.containing(self.Positioned(3.5, 4.5)) == Tile(3, 4)
+    def test_containing_drops_height(self) -> None:
+        assert Tile.containing(Point3D((1.4, 2.6, 9.9))) == Tile(1, 2)
 
-    class Positioned:
-        """Stands in for a unit."""
-
-        def __init__(self, x: float, y: float) -> None:
-            self.position = Point((x, y))
+    def test_containing_a_tile_gives_that_tile(self) -> None:
+        """A tile reads as its center, not as its address, so it lands back on itself."""
+        assert Tile.containing(Tile(3, 4)) == Tile(3, 4)
 
     def test_center_is_where_a_unit_stands(self) -> None:
         assert Tile(3, 4).center == Point((3.5, 4.5))
@@ -464,20 +449,25 @@ class TestTile:
     def test_translated(self) -> None:
         assert Tile(3, 4).translated((2, -1)) == Tile(5, 3)
 
-    def test_read_as_a_point_it_is_the_center(self) -> None:
-        """The tuple is the grid address, but as a point a tile is where a unit would stand."""
-        tile = Tile(3, 4)
-        assert tile in Rectangle(3, 4, 1, 1)
-        assert Point((3.5, 4.5)).distance_to(tile) == 0.0
-        assert Point((3, 4)).distance_to(tile) == pytest.approx(math.sqrt(0.5))
+    def test_it_is_an_address_not_a_point(self) -> None:
+        """A tile is a patch of ground that has a center, so point math must be given that center.
 
-    def test_the_address_and_the_position_stay_separate(self) -> None:
-        """Indexing reads the tuple; point math reads `.position`. Both are right for their purpose."""
+        Its tuple is the grid address. Reading it as a point would measure from the tile's corner, which is a
+        whole half-tile out and would never announce itself, so it is refused instead.
+        """
+        tile = Tile(3, 4)
+        with pytest.raises(TypeError, match="a Tile is an area, not a point"):
+            _ = Point((0, 0)).distance_to(tile)  # pyright: ignore[reportArgumentType]
+        assert Point((3.5, 4.5)).distance_to(tile.center) == 0.0
+        assert Point((3, 4)).distance_to(tile.center) == pytest.approx(math.sqrt(0.5))
+
+    def test_the_address_indexes_and_the_center_measures(self) -> None:
+        """Both readings stay available, and neither is the default."""
         grid = numpy.arange(100).reshape(10, 10)
         tile = Tile(3, 4)
-        assert grid[tile] == grid[3, 4]
-        assert tile.position == (3.5, 4.5)
-        assert Point((0, 0)).towards(tile, 1.0) == pytest.approx(tile.center.normalized)
+        assert grid[tile] == grid[3, 4], "the tuple is the array index"
+        assert tile.center == (3.5, 4.5), "the center is where a unit stands"
+        assert Point((0, 0)).towards(tile.center, 1.0) == pytest.approx(tile.center.normalized)
 
     def test_neighbors(self) -> None:
         assert set(Tile(0, 0).neighbors4) == {Tile(0, 1), Tile(0, -1), Tile(1, 0), Tile(-1, 0)}

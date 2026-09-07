@@ -82,6 +82,25 @@ class Grid[T: float]:
         view.flags.writeable = False
         return view
 
+    def index_of(self, point: PointLike) -> tuple[int, int]:
+        """The index into `values` of the tile holding `point`, for handing the array to other code.
+
+        Raises `IndexError` for a point the grid does not cover, rather than letting a negative index through.
+        """
+        tile = Tile.containing(point)
+        x = tile[0] - self._origin[0]
+        y = tile[1] - self._origin[1]
+        if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
+            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
+        return x, y
+
+    def tile_at(self, index: tuple[int, int]) -> Tile:
+        """The tile an index into `values` addresses. The inverse of `index_of`."""
+        x, y = index
+        if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
+            raise IndexError(f"{index} lies outside a {self.width} by {self.height} grid")
+        return Tile(self._origin[0] + x, self._origin[1] + y)
+
     def _aligned(self, other: Grid) -> ndarray:
         """The values of `other`, which must cover the same tiles as this grid."""
         if not isinstance(other, Grid):
@@ -108,19 +127,19 @@ class Grid[T: float]:
         # Points first, and by tuple: `Tile` is the only `Area` that is one, and it addresses a single
         # tile like any other point. A miss here is cheap, where a miss against an `Area` subclass is not.
         if isinstance(key, tuple):
-            return self._data.item(self._address(key))
+            return self._data.item(self.index_of(key))
         if isinstance(key, Rectangle):
             return self._data[self._slices(key)]
         if isinstance(key, Area):
             return self._data[self._scatter(key)]
         if isinstance(key, Grid):
             return self._data[self._mask(key)]
-        return self._data.item(self._address(key))
+        return self._data.item(self.index_of(key))
 
     def __setitem__(self, key: PointLike | Area | Grid[bool], value: T | ndarray) -> None:
         """Writes a value at a point, over an area, or over the tiles a mask selects."""
         if isinstance(key, tuple):
-            self._data[self._address(key)] = value
+            self._data[self.index_of(key)] = value
         elif isinstance(key, Rectangle):
             self._data[self._slices(key)] = value
         elif isinstance(key, Area):
@@ -128,20 +147,11 @@ class Grid[T: float]:
         elif isinstance(key, Grid):
             self._data[self._mask(key)] = value
         else:
-            self._data[self._address(key)] = value
+            self._data[self.index_of(key)] = value
 
     def fill(self, value: T) -> None:
         """Sets every tile to `value`."""
         self._data[:] = value
-
-    def _address(self, point: PointLike) -> tuple[int, int]:
-        """The array index of the tile holding `point`."""
-        tile = Tile.containing(point)
-        x = tile[0] - self._origin[0]
-        y = tile[1] - self._origin[1]
-        if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
-            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
-        return x, y
 
     def _slices(self, rectangle: Rectangle) -> tuple[slice, slice]:
         """The array slices covering the tiles of `rectangle`, clipped to the grid."""
@@ -254,7 +264,7 @@ class Grid[T: float]:
     def _tile_at(self, flat_index: int) -> Tile:
         """The tile addressed by a flat index into the grid."""
         x, y = numpy.unravel_index(flat_index, self._data.shape)
-        return Tile(self._origin[0] + int(x), self._origin[1] + int(y))
+        return self.tile_at((int(x), int(y)))
 
     # --- Operators
 
