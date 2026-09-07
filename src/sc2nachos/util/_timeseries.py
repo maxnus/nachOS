@@ -244,17 +244,17 @@ class TimeSeries[T: float]:
         return TimeSeries(op(mine, theirs), start, size)
 
     def __add__(self, other: TimeSeries[T] | T) -> TimeSeries[T]:
-        if not isinstance(other, TimeSeries | int | float):
+        if not isinstance(other, OPERAND_TYPES):
             return NotImplemented
         return self._combine(other, numpy.add)
 
     def __sub__(self, other: TimeSeries[T] | T) -> TimeSeries[T]:
-        if not isinstance(other, TimeSeries | int | float):
+        if not isinstance(other, OPERAND_TYPES):
             return NotImplemented
         return self._combine(other, numpy.subtract)
 
     def __mul__(self, other: TimeSeries[T] | T) -> TimeSeries[T]:
-        if not isinstance(other, TimeSeries | int | float):
+        if not isinstance(other, OPERAND_TYPES):
             return NotImplemented
         return self._combine(other, numpy.multiply)
 
@@ -262,7 +262,7 @@ class TimeSeries[T: float]:
     __rmul__ = __mul__
 
     def __rsub__(self, other: T) -> TimeSeries[T]:
-        if not isinstance(other, int | float):
+        if not isinstance(other, SCALAR_TYPES):
             return NotImplemented
         return self._combine(other, lambda values, scalar: numpy.subtract(scalar, values))
 
@@ -270,3 +270,9 @@ class TimeSeries[T: float]:
         if self._size == 0:
             return f"{type(self).__name__}(empty, dtype={self.dtype})"
         return f"{type(self).__name__}(steps {self._start}-{self.last_step}, dtype={self.dtype})"
+
+
+# The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every
+# call. They sit below the class because `TimeSeries` is one of them.
+SCALAR_TYPES = (int, float)
+OPERAND_TYPES = (TimeSeries, *SCALAR_TYPES)
