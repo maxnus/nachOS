@@ -21,6 +21,12 @@ if TYPE_CHECKING:
 _ORIGIN = Tile(0, 0)
 
 
+# Scalars a grid combines with. numpy scalars subclass neither `int` nor `bool`, and only `float64`
+# subclasses `float`; without them the operand round-trips through numpy and back, at twice the cost.
+# Held as a constant because an inline `a | b` union is rebuilt on every call, at seven times the cost.
+SCALAR_TYPES = (int, float, numpy.number, numpy.bool_)
+
+
 @final
 class Grid[T: float]:
     """A grid of values covering whole tiles, addressed by map position rather than by array index.
@@ -272,9 +278,7 @@ class Grid[T: float]:
         """`op` applied against a scalar, or tilewise against a grid covering the same tiles."""
         if isinstance(other, Grid):
             values = self._aligned(other)
-        elif isinstance(other, bool | int | float | numpy.number | numpy.bool_):
-            # numpy scalars subclass neither `int` nor `bool`, and only `float64` subclasses `float`.
-            # Without them here the operand round-trips through numpy and back, at twice the cost.
+        elif isinstance(other, SCALAR_TYPES):
             values = other
         else:
             return NotImplemented
