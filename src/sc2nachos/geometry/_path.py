@@ -19,9 +19,7 @@ if TYPE_CHECKING:
 class TilePath(Sequence[Tile]):
     """A walk from one tile to the next, in order.
 
-    A path may cover nothing, and an empty one is falsy; `start` and `end` raise `ValueError` on it. A
-    pathfinder that reaches nothing reports `None` rather than an empty path: no route is not a route of no
-    tiles.
+    A path may cover nothing; an empty one is falsy, and `start` and `end` raise `ValueError` on it.
     """
 
     __slots__ = ("_distance", "_tiles")
@@ -80,7 +78,7 @@ class TilePath(Sequence[Tile]):
     def __contains__(self, point: object) -> bool:
         """Whether the walk covers the tile holding `point`. Raises `TypeError` on anything but a position.
 
-        Scans the walk. Build a `TileSet` from the path to test many positions against it.
+        Scans the walk; build a `TileSet` from it to test many positions.
         """
         return Tile.containing(cast("PointLike | Tile", point)) in self._tiles
 

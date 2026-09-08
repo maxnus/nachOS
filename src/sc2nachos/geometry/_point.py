@@ -33,8 +33,7 @@ SCALAR_TYPES = (int, float, numbers.Real)
 def coordinates(value: PointLike) -> PointLike:
     """`value` itself, once it is known to be coordinates. A caller that is not type-checked fails here.
 
-    A `Tile` is rejected despite being a coordinate pair: its address is not the point it stands for, so
-    reading it as one would quietly measure from the tile's corner.
+    A `Tile` is rejected despite being a coordinate pair: it is an address, not the point it stands for.
     """
     # Points first: the common case, and a concrete class is far quicker to test than an ABC.
     if isinstance(value, _PointND) or type(value) is tuple:

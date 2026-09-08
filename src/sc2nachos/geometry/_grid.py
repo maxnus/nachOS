@@ -46,10 +46,8 @@ class Grid[T: float]:
     def __init__(self, data: ndarray, *, origin: Tile = _ORIGIN, outside: T | None = None) -> None:
         """A grid holding `data`, whose `[0, 0]` entry is the tile at `origin`.
 
-        `outside` is what reading a point beyond the grid answers. Without it such a read raises, which is
-        right for a grid with no meaning off its own ground -- terrain height has none -- and wrong for one
-        that does: nothing stands on ground the grid does not cover, so a threat grid answers zero there.
-        Writing beyond the grid always raises.
+        `outside` is what reading a point beyond the grid answers; without it such a read raises. Writing
+        beyond the grid always raises.
         """
         if data.ndim != 2:
             raise ValueError(f"a grid is two-dimensional, got {data.ndim} dimensions")
@@ -101,7 +99,7 @@ class Grid[T: float]:
     def index_of(self, point: PointLike) -> tuple[int, int]:
         """The index into `values` of the tile holding `point`, for handing the array to other code.
 
-        Raises `IndexError` for a point the grid does not cover, rather than letting a negative index through.
+        Raises `IndexError` for a point the grid does not cover, `outside` notwithstanding.
         """
         tile = Tile.containing(point)
         x = tile[0] - self._origin[0]
@@ -123,10 +121,7 @@ class Grid[T: float]:
         return self._outside
 
     def with_outside(self, value: T | None) -> Grid[T]:
-        """The same grid, reading `value` beyond its edge. Shares the data rather than copying it.
-
-        For a grid whose off-grid answer only its producer knows, after operations that cannot carry one.
-        """
+        """The same grid, reading `value` beyond its edge. Shares the data rather than copying it."""
         return Grid(self._data, origin=self._origin, outside=value)
 
     def _value_at(self, point: PointLike) -> T:
@@ -234,7 +229,7 @@ class Grid[T: float]:
         return Grid(chosen, origin=self._origin, outside=self._where_outside(condition, other))
 
     def _where_outside(self, condition: Grid[bool], other: T | Grid[T]) -> T | None:
-        """The off-grid value `where` carries: the condition picks between the operands off the grid too."""
+        """Whichever operand's off-grid value the condition picks, or None if any of them has none."""
         chosen = self if condition._outside else other
         if isinstance(chosen, Grid):
             return None if condition._outside is None else chosen._outside
@@ -255,21 +250,14 @@ class Grid[T: float]:
         return Grid(self._data[x, y].copy(), origin=origin, outside=self._outside)
 
     def distance_from(self, point: PointLike, *, outside: float | None = None) -> Grid[float]:
-        """The distance from each tile's center to `point`.
-
-        The result is not derived tile by tile from this grid, so `outside` is given rather than carried.
-        """
+        """The distance from each tile's center to `point`."""
         position = coordinates(point)
         xs = numpy.arange(self.width) + self._origin[0] + 0.5 - position[0]
         ys = numpy.arange(self.height) + self._origin[1] + 0.5 - position[1]
         return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin, outside=outside)
 
     def distance_transform(self: Grid[bool], *, outside: float | None = None) -> Grid[float]:
-        """For each true tile, the distance to the nearest false one; zero on a false tile.
-
-        Every tile's value depends on the whole grid, so `outside` is given rather than carried: what lies
-        beyond the edge is the caller's to say, not this grid's to infer.
-        """
+        """For each true tile, the distance to the nearest false one; zero on a false tile."""
         distances = scipy.ndimage.distance_transform_edt(self._data, return_indices=False)
         return Grid(numpy.asarray(distances), origin=self._origin, outside=outside)
 
@@ -279,8 +267,6 @@ class Grid[T: float]:
         Given `within`, only those tiles contribute and the result is renormalized, so values near the edge
         of the region are not dragged down by the tiles outside it. A tile no contributor reaches keeps its
         own value.
-
-        Each tile draws on its neighbours, so `outside` is given rather than carried.
         """
         values = self._data.astype(float)
         if within is None:
@@ -338,11 +324,7 @@ class Grid[T: float]:
         return Grid(op(left, right), origin=self._origin, outside=self._combine_outside(other, op, flip=flip))
 
     def _combine_outside(self, other: object, op: Callable[..., ndarray], *, flip: bool) -> T | None:
-        """The off-grid value the result carries, or None if either operand has none.
-
-        A pointwise operation answers off the grid the way it answers on it, so the same `op` runs on the
-        operands' own off-grid values.
-        """
+        """`op` applied to the operands' own off-grid values, or None if either has none."""
         if self._outside is None:
             return None
         if isinstance(other, Grid):
