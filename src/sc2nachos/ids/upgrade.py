@@ -55,7 +55,6 @@ class UpgradeId(ReadableIntEnum):
     PROTOSS_SHIELDS_2 = RawUpgradeId.ProtossShieldsLevel2
     PROTOSS_SHIELDS_3 = RawUpgradeId.ProtossShieldsLevel3
     PSI_STORM = RawUpgradeId.PsiStormTech
-    RAVEN_RECALIBRATED_EXPLOSIVES = RawUpgradeId.RavenRecalibratedExplosives
     ROACH_BURROW_MOVE = RawUpgradeId.TunnelingClaws
     ROACH_SPEED = RawUpgradeId.GlialReconstitution
     SMART_SERVOS = RawUpgradeId.SmartServos
@@ -75,9 +74,6 @@ class UpgradeId(ReadableIntEnum):
     TERRAN_VEHICLE_AND_SHIP_ARMOR_1 = RawUpgradeId.TerranVehicleAndShipArmorsLevel1  # "Plating" in game
     TERRAN_VEHICLE_AND_SHIP_ARMOR_2 = RawUpgradeId.TerranVehicleAndShipArmorsLevel2
     TERRAN_VEHICLE_AND_SHIP_ARMOR_3 = RawUpgradeId.TerranVehicleAndShipArmorsLevel3
-    TERRAN_VEHICLE_ARMOR_1 = RawUpgradeId.TerranVehicleArmorsLevel1  # "Plating" in game
-    TERRAN_VEHICLE_ARMOR_2 = RawUpgradeId.TerranVehicleArmorsLevel2
-    TERRAN_VEHICLE_ARMOR_3 = RawUpgradeId.TerranVehicleArmorsLevel3
     TERRAN_VEHICLE_WEAPONS_1 = RawUpgradeId.TerranVehicleWeaponsLevel1
     TERRAN_VEHICLE_WEAPONS_2 = RawUpgradeId.TerranVehicleWeaponsLevel2
     TERRAN_VEHICLE_WEAPONS_3 = RawUpgradeId.TerranVehicleWeaponsLevel3
