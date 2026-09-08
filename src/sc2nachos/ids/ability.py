@@ -40,7 +40,6 @@ class AbilityId(ReadableIntEnum):
     HARVEST_RETURN_SCV = RawAbilityId.Harvest_Return_SCV
     LAND = RawAbilityId.Land
     LIFT = RawAbilityId.Lift
-    LOWER_SUPPLY_DEPOT = RawAbilityId.Morph_SupplyDepot_Lower
     MEDIVAC_BOOST = RawAbilityId.Effect_MedivacIgniteAfterburners
     MEDIVAC_HEAL = RawAbilityId.MedivacHeal_Heal
     MORPH_TO_BANELING = RawAbilityId.MorphZerglingToBaneling_Baneling
@@ -49,7 +48,6 @@ class AbilityId(ReadableIntEnum):
     MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
     MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
     NULL = RawAbilityId.Null_Null
-    RAISE_SUPPLY_DEPOT = RawAbilityId.Morph_SupplyDepot_Raise
     REPAIR = RawAbilityId.Effect_Repair
     SCANNER_SWEEP = RawAbilityId.ScannerSweep_Scan
     SMART = RawAbilityId.Smart  # the right-click order
@@ -57,4 +55,6 @@ class AbilityId(ReadableIntEnum):
     STIM = RawAbilityId.Effect_Stim
     STIM_MARAUDER = RawAbilityId.Effect_Stim_Marauder
     STIM_MARINE = RawAbilityId.Effect_Stim_Marine
+    SUPPLY_DEPOT_LOWER = RawAbilityId.Morph_SupplyDepot_Lower
+    SUPPLY_DEPOT_RAISE = RawAbilityId.Morph_SupplyDepot_Raise
     UNLOAD_ALL_BUNKER = RawAbilityId.UnloadAll_Bunker
