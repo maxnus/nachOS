@@ -65,9 +65,6 @@ class UpgradeId(ReadableIntEnum):
     TERRAN_INFANTRY_WEAPONS_1 = RawUpgradeId.TerranInfantryWeaponsLevel1
     TERRAN_INFANTRY_WEAPONS_2 = RawUpgradeId.TerranInfantryWeaponsLevel2
     TERRAN_INFANTRY_WEAPONS_3 = RawUpgradeId.TerranInfantryWeaponsLevel3
-    TERRAN_SHIP_ARMOR_1 = RawUpgradeId.TerranShipArmorsLevel1  # "Plating" in game
-    TERRAN_SHIP_ARMOR_2 = RawUpgradeId.TerranShipArmorsLevel2
-    TERRAN_SHIP_ARMOR_3 = RawUpgradeId.TerranShipArmorsLevel3
     TERRAN_SHIP_WEAPONS_1 = RawUpgradeId.TerranShipWeaponsLevel1
     TERRAN_SHIP_WEAPONS_2 = RawUpgradeId.TerranShipWeaponsLevel2
     TERRAN_SHIP_WEAPONS_3 = RawUpgradeId.TerranShipWeaponsLevel3
