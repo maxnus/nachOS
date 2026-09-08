@@ -27,7 +27,7 @@ class AbilityId(ReadableIntEnum):
     BUILD_TECH_LAB = RawAbilityId.Build_TechLab
     CALLDOWN_MULE = RawAbilityId.CalldownMULE_CalldownMULE
     CANCEL = RawAbilityId.Cancel
-    EFFECT_IGNITE_AFTERBURNERS = RawAbilityId.Effect_MedivacIgniteAfterburners  # the medivac boost
+    EFFECT_MEDIVAC_BOOST = RawAbilityId.Effect_MedivacIgniteAfterburners
     EFFECT_REPAIR = RawAbilityId.Effect_Repair
     EFFECT_STIM = RawAbilityId.Effect_Stim
     EFFECT_STIM_MARAUDER = RawAbilityId.Effect_Stim_Marauder

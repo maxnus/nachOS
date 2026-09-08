@@ -12,7 +12,7 @@ class UnitTypeId(ReadableIntEnum):
     """UnitType ids used in multiplayer games."""
 
     ADEPT = RawUnitTypeId.Adept
-    ADEPT_PHASE_SHIFT = RawUnitTypeId.AdeptPhaseShift  # the shade
+    ADEPT_SHADE = RawUnitTypeId.AdeptPhaseShift
     ARCHON = RawUnitTypeId.Archon
     ARMORY = RawUnitTypeId.Armory
     ASSIMILATOR = RawUnitTypeId.Assimilator
@@ -53,7 +53,6 @@ class UnitTypeId(ReadableIntEnum):
     DARK_SHRINE = RawUnitTypeId.DarkShrine
     DARK_TEMPLAR = RawUnitTypeId.DarkTemplar
     DISRUPTOR = RawUnitTypeId.Disruptor
-    DISRUPTOR_PHASED = RawUnitTypeId.DisruptorPhased  # the purification nova
     DRONE = RawUnitTypeId.Drone
     DRONE_BURROWED = RawUnitTypeId.DroneBurrowed
     EGG = RawUnitTypeId.Egg
@@ -85,13 +84,12 @@ class UnitTypeId(ReadableIntEnum):
     INFESTOR = RawUnitTypeId.Infestor
     INFESTOR_BURROWED = RawUnitTypeId.InfestorBurrowed
     INTERCEPTOR = RawUnitTypeId.Interceptor
-    KD8_CHARGE = RawUnitTypeId.KD8Charge  # the reaper grenade
     LAB_MINERAL_FIELD = RawUnitTypeId.LabMineralField
     LAB_MINERAL_FIELD_750 = RawUnitTypeId.LabMineralField750
     LAIR = RawUnitTypeId.Lair
     LARVA = RawUnitTypeId.Larva
     LIBERATOR = RawUnitTypeId.Liberator
-    LIBERATOR_AG = RawUnitTypeId.LiberatorAG  # a sieged liberator, in defender mode
+    LIBERATOR_SIEGED = RawUnitTypeId.LiberatorAG
     LOCUST = RawUnitTypeId.LocustMP
     LOCUST_FLYING = RawUnitTypeId.LocustMPFlying
     LURKER = RawUnitTypeId.LurkerMP
@@ -114,7 +112,6 @@ class UnitTypeId(ReadableIntEnum):
     NOT_A_UNIT = RawUnitTypeId.NotAUnit
     OBSERVER = RawUnitTypeId.Observer
     ORACLE = RawUnitTypeId.Oracle
-    ORACLE_STASIS_TRAP = RawUnitTypeId.OracleStasisTrap  # the stasis ward
     ORBITAL_COMMAND = RawUnitTypeId.OrbitalCommand
     ORBITAL_COMMAND_FLYING = RawUnitTypeId.OrbitalCommandFlying
     OVERLORD = RawUnitTypeId.Overlord
@@ -126,6 +123,7 @@ class UnitTypeId(ReadableIntEnum):
     PLANETARY_FORTRESS = RawUnitTypeId.PlanetaryFortress
     PROBE = RawUnitTypeId.Probe
     PROTOSS_VESPENE_GEYSER = RawUnitTypeId.ProtossVespeneGeyser
+    PURIFICATION_NOVA = RawUnitTypeId.DisruptorPhased
     PURIFIER_MINERAL_FIELD = RawUnitTypeId.PurifierMineralField
     PURIFIER_MINERAL_FIELD_750 = RawUnitTypeId.PurifierMineralField750
     PURIFIER_RICH_MINERAL_FIELD = RawUnitTypeId.PurifierRichMineralField
@@ -140,6 +138,7 @@ class UnitTypeId(ReadableIntEnum):
     RAVEN = RawUnitTypeId.Raven
     REACTOR = RawUnitTypeId.Reactor
     REAPER = RawUnitTypeId.Reaper
+    REAPER_GRENADE = RawUnitTypeId.KD8Charge
     REFINERY = RawUnitTypeId.Refinery
     REFINERY_RICH = RawUnitTypeId.RefineryRich
     RICH_MINERAL_FIELD = RawUnitTypeId.RichMineralField
@@ -170,6 +169,7 @@ class UnitTypeId(ReadableIntEnum):
     STARPORT_FLYING = RawUnitTypeId.StarportFlying
     STARPORT_REACTOR = RawUnitTypeId.StarportReactor
     STARPORT_TECH_LAB = RawUnitTypeId.StarportTechLab
+    STASIS_WARD = RawUnitTypeId.OracleStasisTrap
     SUPPLY_DEPOT = RawUnitTypeId.SupplyDepot
     SUPPLY_DEPOT_LOWERED = RawUnitTypeId.SupplyDepotLowered
     SWARM_HOST = RawUnitTypeId.SwarmHostMP
@@ -178,7 +178,7 @@ class UnitTypeId(ReadableIntEnum):
     TEMPEST = RawUnitTypeId.Tempest
     TEMPLAR_ARCHIVE = RawUnitTypeId.TemplarArchive
     THOR = RawUnitTypeId.Thor
-    THOR_AP = RawUnitTypeId.ThorAP  # a thor in high impact payload mode
+    THOR_HIGH_IMPACT = RawUnitTypeId.ThorAP
     TRANSPORT_OVERLORD_COCOON = RawUnitTypeId.TransportOverlordCocoon
     TWILIGHT_COUNCIL = RawUnitTypeId.TwilightCouncil
     ULTRALISK = RawUnitTypeId.Ultralisk
