@@ -43,8 +43,8 @@ class AbilityId(ReadableIntEnum):
     LOWER_SUPPLY_DEPOT = RawAbilityId.Morph_SupplyDepot_Lower
     MEDIVAC_BOOST = RawAbilityId.Effect_MedivacIgniteAfterburners
     MEDIVAC_HEAL = RawAbilityId.MedivacHeal_Heal
-    MORPH_LURKER = RawAbilityId.Morph_Lurker
     MORPH_TO_BANELING = RawAbilityId.MorphZerglingToBaneling_Baneling
+    MORPH_TO_LURKER = RawAbilityId.Morph_Lurker
     MORPH_TO_RAVAGER = RawAbilityId.MorphToRavager_Ravager
     MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
     MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
