@@ -116,7 +116,10 @@ class UnitTypeId(ReadableIntEnum):
     MUTALISK = RawUnitTypeId.Mutalisk
     NEXUS = RawUnitTypeId.Nexus
     NOT_A_UNIT = RawUnitTypeId.NotAUnit
+    NYDUS_NETWORK = RawUnitTypeId.NydusNetwork
+    NYDUS_WORM = RawUnitTypeId.NydusCanal
     OBSERVER = RawUnitTypeId.Observer
+    OBSERVER_SURVEILLANCE = RawUnitTypeId.ObserverSiegeMode
     ORACLE = RawUnitTypeId.Oracle
     ORBITAL_COMMAND = RawUnitTypeId.OrbitalCommand
     ORBITAL_COMMAND_FLYING = RawUnitTypeId.OrbitalCommandFlying
@@ -125,6 +128,7 @@ class UnitTypeId(ReadableIntEnum):
     OVERLORD_COCOON_TRANSPORT = RawUnitTypeId.TransportOverlordCocoon
     OVERLORD_TRANSPORT = RawUnitTypeId.OverlordTransport
     OVERSEER = RawUnitTypeId.Overseer
+    OVERSEER_OVERSIGHT = RawUnitTypeId.OverseerSiegeMode
     PHOENIX = RawUnitTypeId.Phoenix
     PHOTON_CANNON = RawUnitTypeId.PhotonCannon
     PLANETARY_FORTRESS = RawUnitTypeId.PlanetaryFortress
