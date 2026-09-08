@@ -27,11 +27,6 @@ class AbilityId(ReadableIntEnum):
     BUILD_TECH_LAB = RawAbilityId.Build_TechLab
     CALLDOWN_MULE = RawAbilityId.CalldownMULE_CalldownMULE
     CANCEL = RawAbilityId.Cancel
-    EFFECT_MEDIVAC_BOOST = RawAbilityId.Effect_MedivacIgniteAfterburners
-    EFFECT_REPAIR = RawAbilityId.Effect_Repair
-    EFFECT_STIM = RawAbilityId.Effect_Stim
-    EFFECT_STIM_MARAUDER = RawAbilityId.Effect_Stim_Marauder
-    EFFECT_STIM_MARINE = RawAbilityId.Effect_Stim_Marine
     HALT = RawAbilityId.Halt
     HARVEST_GATHER = RawAbilityId.Harvest_Gather
     HARVEST_GATHER_DRONE = RawAbilityId.Harvest_Gather_Drone
@@ -45,6 +40,7 @@ class AbilityId(ReadableIntEnum):
     HARVEST_RETURN_SCV = RawAbilityId.Harvest_Return_SCV
     LAND = RawAbilityId.Land
     LIFT = RawAbilityId.Lift
+    MEDIVAC_BOOST = RawAbilityId.Effect_MedivacIgniteAfterburners
     MEDIVAC_HEAL = RawAbilityId.MedivacHeal_Heal
     MORPH_LURKER = RawAbilityId.Morph_Lurker
     MORPH_SUPPLY_DEPOT_LOWER = RawAbilityId.Morph_SupplyDepot_Lower
@@ -54,7 +50,11 @@ class AbilityId(ReadableIntEnum):
     MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
     MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
     NULL = RawAbilityId.Null_Null
+    REPAIR = RawAbilityId.Effect_Repair
     SCANNER_SWEEP = RawAbilityId.ScannerSweep_Scan
     SMART = RawAbilityId.Smart  # the right-click order
     SPAWN_CHANGELING = RawAbilityId.SpawnChangeling_SpawnChangeling
+    STIM = RawAbilityId.Effect_Stim
+    STIM_MARAUDER = RawAbilityId.Effect_Stim_Marauder
+    STIM_MARINE = RawAbilityId.Effect_Stim_Marine
     UNLOAD_ALL_BUNKER = RawAbilityId.UnloadAll_Bunker
