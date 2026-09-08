@@ -157,6 +157,15 @@ class TestOutsidePropagation:
         undeclared = Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0))
         assert left.where(undeclared, right).outside is None
 
+    def test_where_ignores_the_operand_the_condition_does_not_pick(self) -> None:
+        _, right = self.grids()
+        bare = Grid(numpy.ones((4, 4)), origin=Tile(0, 0))
+        never = Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0), outside=False)
+        always = never.with_outside(True)
+        assert bare.where(never, right).outside == 3.0
+        assert bare.where(never, 9.0).outside == 9.0
+        assert bare.where(always, right).outside is None
+
     def test_the_operations_that_cannot_carry_one_take_one(self) -> None:
         pathable = Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0), outside=False)
         assert pathable.distance_transform().outside is None

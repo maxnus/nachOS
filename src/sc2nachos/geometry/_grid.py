@@ -229,11 +229,12 @@ class Grid[T: float]:
         return Grid(chosen, origin=self._origin, outside=self._where_outside(condition, other))
 
     def _where_outside(self, condition: Grid[bool], other: T | Grid[T]) -> T | None:
-        """Whichever operand's off-grid value the condition picks, or None if any of them has none."""
-        chosen = self if condition._outside else other
-        if isinstance(chosen, Grid):
-            return None if condition._outside is None else chosen._outside
-        return None if condition._outside is None or self._outside is None else chosen
+        """The off-grid value of the operand the condition picks there, or None if it has none."""
+        if condition._outside is None:
+            return None
+        if condition._outside:
+            return self._outside
+        return other._outside if isinstance(other, Grid) else other
 
     def minimum(self, other: Grid[T]) -> Grid[T]:
         """The smaller of the two values on each tile."""
