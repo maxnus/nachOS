@@ -66,8 +66,8 @@ class UnitTypeId(ReadableIntEnum):
     GHOST_ACADEMY = RawUnitTypeId.GhostAcademy
     GREATER_SPIRE = RawUnitTypeId.GreaterSpire
     HATCHERY = RawUnitTypeId.Hatchery
+    HELLBAT = RawUnitTypeId.HellionTank
     HELLION = RawUnitTypeId.Hellion
-    HELLION_TANK = RawUnitTypeId.HellionTank
     HIGH_TEMPLAR = RawUnitTypeId.HighTemplar
     HIVE = RawUnitTypeId.Hive
     HYDRALISK = RawUnitTypeId.Hydralisk

@@ -11,7 +11,7 @@ from sc2nachos.ids.raw import RawAbilityId
 class AbilityId(ReadableIntEnum):
     """Ability ids used in multiplayer games."""
 
-    ARCHON_WARP_TARGET = RawAbilityId.Archon_Warp_Target
+    ARCHON_MERGE = RawAbilityId.Archon_Warp_Target
     ATTACK = RawAbilityId.Attack  # the order you give; a unit reports ATTACK_EXACT
     ATTACK_EXACT = RawAbilityId.attack_Attack  # the order a unit reports running; you give ATTACK
     BUILD_ARMORY = RawAbilityId.TerranBuild_Armory

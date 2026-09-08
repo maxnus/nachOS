@@ -11,11 +11,12 @@ from sc2nachos.ids.raw import RawUpgradeId
 class UpgradeId(ReadableIntEnum):
     """Upgrade ids used in multiplayer games."""
 
-    ADEPT_ATTACK_SPEED = RawUpgradeId.AdeptPiercingAttack  # "Resonating Glaives" in game
+    ADEPT_GLAIVES = RawUpgradeId.AdeptPiercingAttack  # "Resonating Glaives" in game
     BANELING_SPEED = RawUpgradeId.CentrificalHooks  # "Centrifugal Hooks" in game
     BANSHEE_CLOAK = RawUpgradeId.BansheeCloak  # "Cloaking Field" in game
     BANSHEE_SPEED = RawUpgradeId.BansheeSpeed  # "Hyperflight Rotors" in game
     BLINK = RawUpgradeId.BlinkTech
+    BLUE_FLAME = RawUpgradeId.HighCapacityBarrels  # "Infernal Pre-Igniter" in game
     BUILDING_ARMOR = RawUpgradeId.TerranBuildingArmor
     BURROW = RawUpgradeId.Burrow
     CHARGE = RawUpgradeId.Charge
@@ -27,7 +28,6 @@ class UpgradeId(ReadableIntEnum):
     HISEC_AUTO_TRACKING = RawUpgradeId.HiSecAutoTracking
     HYDRALISK_RANGE = RawUpgradeId.EvolveGroovedSpines  # "Grooved Spines" in game
     HYDRALISK_SPEED = RawUpgradeId.EvolveMuscularAugments  # "Muscular Augments" in game
-    INFERNAL_PRE_IGNITER = RawUpgradeId.HighCapacityBarrels
     LIBERATOR_RANGE = RawUpgradeId.LiberatorAGRangeUpgrade  # "Advanced Ballistics" in game
     LURKER_BURROW_SPEED = RawUpgradeId.DiggingClaws  # "Adaptive Talons" in game
     LURKER_RANGE = RawUpgradeId.LurkerRange  # "Seismic Spines" in game
@@ -86,21 +86,21 @@ class UpgradeId(ReadableIntEnum):
     VOID_RAY_SPEED = RawUpgradeId.VoidRaySpeedUpgrade  # "Flux Vanes" in game
     WARP_GATE = RawUpgradeId.WarpGateResearch
     WARP_PRISM_SPEED = RawUpgradeId.GraviticDrive  # "Gravitic Drive" in game
-    WEAPON_REFIT = RawUpgradeId.BattlecruiserEnableSpecializations  # unlocks the yamato cannon
+    YAMATO_CANNON = RawUpgradeId.BattlecruiserEnableSpecializations  # "Weapon Refit" in game
     ZERGLING_ATTACK_SPEED = RawUpgradeId.zerglingattackspeed  # "Adrenal Glands" in game
     ZERGLING_SPEED = RawUpgradeId.zerglingmovementspeed  # "Metabolic Boost" in game
-    ZERG_FLYER_ARMOR_1 = RawUpgradeId.ZergFlyerArmorsLevel1
-    ZERG_FLYER_ARMOR_2 = RawUpgradeId.ZergFlyerArmorsLevel2
-    ZERG_FLYER_ARMOR_3 = RawUpgradeId.ZergFlyerArmorsLevel3
-    ZERG_FLYER_WEAPONS_1 = RawUpgradeId.ZergFlyerWeaponsLevel1
-    ZERG_FLYER_WEAPONS_2 = RawUpgradeId.ZergFlyerWeaponsLevel2
-    ZERG_FLYER_WEAPONS_3 = RawUpgradeId.ZergFlyerWeaponsLevel3
-    ZERG_GROUND_ARMOR_1 = RawUpgradeId.ZergGroundArmorsLevel1
-    ZERG_GROUND_ARMOR_2 = RawUpgradeId.ZergGroundArmorsLevel2
-    ZERG_GROUND_ARMOR_3 = RawUpgradeId.ZergGroundArmorsLevel3
+    ZERG_AIR_ARMOR_1 = RawUpgradeId.ZergFlyerArmorsLevel1
+    ZERG_AIR_ARMOR_2 = RawUpgradeId.ZergFlyerArmorsLevel2
+    ZERG_AIR_ARMOR_3 = RawUpgradeId.ZergFlyerArmorsLevel3
+    ZERG_AIR_WEAPONS_1 = RawUpgradeId.ZergFlyerWeaponsLevel1
+    ZERG_AIR_WEAPONS_2 = RawUpgradeId.ZergFlyerWeaponsLevel2
+    ZERG_AIR_WEAPONS_3 = RawUpgradeId.ZergFlyerWeaponsLevel3
+    ZERG_ARMOR_1 = RawUpgradeId.ZergGroundArmorsLevel1
+    ZERG_ARMOR_2 = RawUpgradeId.ZergGroundArmorsLevel2
+    ZERG_ARMOR_3 = RawUpgradeId.ZergGroundArmorsLevel3
     ZERG_MELEE_WEAPONS_1 = RawUpgradeId.ZergMeleeWeaponsLevel1
     ZERG_MELEE_WEAPONS_2 = RawUpgradeId.ZergMeleeWeaponsLevel2
     ZERG_MELEE_WEAPONS_3 = RawUpgradeId.ZergMeleeWeaponsLevel3
-    ZERG_MISSILE_WEAPONS_1 = RawUpgradeId.ZergMissileWeaponsLevel1
-    ZERG_MISSILE_WEAPONS_2 = RawUpgradeId.ZergMissileWeaponsLevel2
-    ZERG_MISSILE_WEAPONS_3 = RawUpgradeId.ZergMissileWeaponsLevel3
+    ZERG_RANGE_WEAPONS_1 = RawUpgradeId.ZergMissileWeaponsLevel1
+    ZERG_RANGE_WEAPONS_2 = RawUpgradeId.ZergMissileWeaponsLevel2
+    ZERG_RANGE_WEAPONS_3 = RawUpgradeId.ZergMissileWeaponsLevel3
