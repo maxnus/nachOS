@@ -12,7 +12,7 @@ class UnitTypeId(ReadableIntEnum):
     """UnitType ids used in multiplayer games."""
 
     ADEPT = RawUnitTypeId.Adept
-    ADEPT_PHASE_SHIFT = RawUnitTypeId.AdeptPhaseShift
+    ADEPT_PHASE_SHIFT = RawUnitTypeId.AdeptPhaseShift  # the shade
     ARCHON = RawUnitTypeId.Archon
     ARMORY = RawUnitTypeId.Armory
     ASSIMILATOR = RawUnitTypeId.Assimilator
@@ -53,7 +53,7 @@ class UnitTypeId(ReadableIntEnum):
     DARK_SHRINE = RawUnitTypeId.DarkShrine
     DARK_TEMPLAR = RawUnitTypeId.DarkTemplar
     DISRUPTOR = RawUnitTypeId.Disruptor
-    DISRUPTOR_PHASED = RawUnitTypeId.DisruptorPhased
+    DISRUPTOR_PHASED = RawUnitTypeId.DisruptorPhased  # the purification nova
     DRONE = RawUnitTypeId.Drone
     DRONE_BURROWED = RawUnitTypeId.DroneBurrowed
     EGG = RawUnitTypeId.Egg
@@ -85,13 +85,13 @@ class UnitTypeId(ReadableIntEnum):
     INFESTOR = RawUnitTypeId.Infestor
     INFESTOR_BURROWED = RawUnitTypeId.InfestorBurrowed
     INTERCEPTOR = RawUnitTypeId.Interceptor
-    KD8_CHARGE = RawUnitTypeId.KD8Charge
+    KD8_CHARGE = RawUnitTypeId.KD8Charge  # the reaper grenade
     LAB_MINERAL_FIELD = RawUnitTypeId.LabMineralField
     LAB_MINERAL_FIELD_750 = RawUnitTypeId.LabMineralField750
     LAIR = RawUnitTypeId.Lair
     LARVA = RawUnitTypeId.Larva
     LIBERATOR = RawUnitTypeId.Liberator
-    LIBERATOR_AG = RawUnitTypeId.LiberatorAG
+    LIBERATOR_AG = RawUnitTypeId.LiberatorAG  # a sieged liberator, in defender mode
     LOCUST = RawUnitTypeId.LocustMP
     LOCUST_FLYING = RawUnitTypeId.LocustMPFlying
     LURKER = RawUnitTypeId.LurkerMP
@@ -114,7 +114,7 @@ class UnitTypeId(ReadableIntEnum):
     NOT_A_UNIT = RawUnitTypeId.NotAUnit
     OBSERVER = RawUnitTypeId.Observer
     ORACLE = RawUnitTypeId.Oracle
-    ORACLE_STASIS_TRAP = RawUnitTypeId.OracleStasisTrap
+    ORACLE_STASIS_TRAP = RawUnitTypeId.OracleStasisTrap  # the stasis ward
     ORBITAL_COMMAND = RawUnitTypeId.OrbitalCommand
     ORBITAL_COMMAND_FLYING = RawUnitTypeId.OrbitalCommandFlying
     OVERLORD = RawUnitTypeId.Overlord
@@ -178,7 +178,7 @@ class UnitTypeId(ReadableIntEnum):
     TEMPEST = RawUnitTypeId.Tempest
     TEMPLAR_ARCHIVE = RawUnitTypeId.TemplarArchive
     THOR = RawUnitTypeId.Thor
-    THOR_AP = RawUnitTypeId.ThorAP
+    THOR_AP = RawUnitTypeId.ThorAP  # a thor in high impact payload mode
     TRANSPORT_OVERLORD_COCOON = RawUnitTypeId.TransportOverlordCocoon
     TWILIGHT_COUNCIL = RawUnitTypeId.TwilightCouncil
     ULTRALISK = RawUnitTypeId.Ultralisk

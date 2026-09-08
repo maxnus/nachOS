@@ -11,10 +11,9 @@ from sc2nachos.ids.raw import RawUpgradeId
 class UpgradeId(ReadableIntEnum):
     """Upgrade ids used in multiplayer games."""
 
-    ADVANCED_BALLISTICS = RawUpgradeId.LiberatorAGRangeUpgrade
-    BANSHEE_CLOAK = RawUpgradeId.BansheeCloak
-    BANSHEE_SPEED = RawUpgradeId.BansheeSpeed
-    BATTLECRUISER_ENABLE_SPECIALIZATIONS = RawUpgradeId.BattlecruiserEnableSpecializations
+    ADVANCED_BALLISTICS = RawUpgradeId.LiberatorAGRangeUpgrade  # the liberator range upgrade
+    BANSHEE_CLOAK = RawUpgradeId.BansheeCloak  # "Cloaking Field" in game
+    BANSHEE_SPEED = RawUpgradeId.BansheeSpeed  # "Hyperflight Rotors" in game
     BUILDING_ARMOR = RawUpgradeId.TerranBuildingArmor
     COMBAT_SHIELD = RawUpgradeId.ShieldWall
     CONCUSSIVE_SHELLS = RawUpgradeId.PunisherGrenades
@@ -27,10 +26,10 @@ class UpgradeId(ReadableIntEnum):
     INFANTRY_WEAPONS_1 = RawUpgradeId.TerranInfantryWeaponsLevel1
     INFANTRY_WEAPONS_2 = RawUpgradeId.TerranInfantryWeaponsLevel2
     INFANTRY_WEAPONS_3 = RawUpgradeId.TerranInfantryWeaponsLevel3
-    MEDIVAC_SPEED_BOOST = RawUpgradeId.MedivacIncreaseSpeedBoost
+    MEDIVAC_SPEED_BOOST = RawUpgradeId.MedivacIncreaseSpeedBoost  # "Rapid Reignition System" in game
     PERSONAL_CLOAKING = RawUpgradeId.PersonalCloaking
     RAVEN_RECALIBRATED_EXPLOSIVES = RawUpgradeId.RavenRecalibratedExplosives
-    SHIP_ARMOR_1 = RawUpgradeId.TerranShipArmorsLevel1
+    SHIP_ARMOR_1 = RawUpgradeId.TerranShipArmorsLevel1  # "Ship Plating" in game
     SHIP_ARMOR_2 = RawUpgradeId.TerranShipArmorsLevel2
     SHIP_ARMOR_3 = RawUpgradeId.TerranShipArmorsLevel3
     SHIP_WEAPONS_1 = RawUpgradeId.TerranShipWeaponsLevel1
@@ -38,12 +37,13 @@ class UpgradeId(ReadableIntEnum):
     SHIP_WEAPONS_3 = RawUpgradeId.TerranShipWeaponsLevel3
     SMART_SERVOS = RawUpgradeId.SmartServos
     STIMPACK = RawUpgradeId.Stimpack
-    VEHICLE_AND_SHIP_ARMOR_1 = RawUpgradeId.TerranVehicleAndShipArmorsLevel1
+    VEHICLE_AND_SHIP_ARMOR_1 = RawUpgradeId.TerranVehicleAndShipArmorsLevel1  # "Vehicle and Ship Plating" in game
     VEHICLE_AND_SHIP_ARMOR_2 = RawUpgradeId.TerranVehicleAndShipArmorsLevel2
     VEHICLE_AND_SHIP_ARMOR_3 = RawUpgradeId.TerranVehicleAndShipArmorsLevel3
-    VEHICLE_ARMOR_1 = RawUpgradeId.TerranVehicleArmorsLevel1
+    VEHICLE_ARMOR_1 = RawUpgradeId.TerranVehicleArmorsLevel1  # "Vehicle Plating" in game
     VEHICLE_ARMOR_2 = RawUpgradeId.TerranVehicleArmorsLevel2
     VEHICLE_ARMOR_3 = RawUpgradeId.TerranVehicleArmorsLevel3
     VEHICLE_WEAPONS_1 = RawUpgradeId.TerranVehicleWeaponsLevel1
     VEHICLE_WEAPONS_2 = RawUpgradeId.TerranVehicleWeaponsLevel2
     VEHICLE_WEAPONS_3 = RawUpgradeId.TerranVehicleWeaponsLevel3
+    WEAPON_REFIT = RawUpgradeId.BattlecruiserEnableSpecializations  # unlocks the yamato cannon

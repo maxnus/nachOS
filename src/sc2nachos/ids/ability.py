@@ -12,8 +12,8 @@ class AbilityId(ReadableIntEnum):
     """Ability ids used in multiplayer games."""
 
     ARCHON_WARP_TARGET = RawAbilityId.Archon_Warp_Target
-    ATTACK = RawAbilityId.Attack
-    ATTACK_EXACT = RawAbilityId.attack_Attack
+    ATTACK = RawAbilityId.Attack  # the order you give; a unit reports ATTACK_EXACT
+    ATTACK_EXACT = RawAbilityId.attack_Attack  # the order a unit reports running; you give ATTACK
     BUILD_ARMORY = RawAbilityId.TerranBuild_Armory
     BUILD_ASSIMILATOR = RawAbilityId.ProtossBuild_Assimilator
     BUILD_BARRACKS = RawAbilityId.TerranBuild_Barracks
@@ -27,7 +27,7 @@ class AbilityId(ReadableIntEnum):
     BUILD_TECH_LAB = RawAbilityId.Build_TechLab
     CALLDOWN_MULE = RawAbilityId.CalldownMULE_CalldownMULE
     CANCEL = RawAbilityId.Cancel
-    EFFECT_IGNITE_AFTERBURNERS = RawAbilityId.Effect_MedivacIgniteAfterburners
+    EFFECT_IGNITE_AFTERBURNERS = RawAbilityId.Effect_MedivacIgniteAfterburners  # the medivac boost
     EFFECT_REPAIR = RawAbilityId.Effect_Repair
     EFFECT_STIM = RawAbilityId.Effect_Stim
     EFFECT_STIM_MARAUDER = RawAbilityId.Effect_Stim_Marauder
@@ -51,10 +51,10 @@ class AbilityId(ReadableIntEnum):
     MORPH_SUPPLY_DEPOT_RAISE = RawAbilityId.Morph_SupplyDepot_Raise
     MORPH_TO_BANELING = RawAbilityId.MorphZerglingToBaneling_Baneling
     MORPH_TO_RAVAGER = RawAbilityId.MorphToRavager_Ravager
-    MOVE = RawAbilityId.Move
-    MOVE_EXACT = RawAbilityId.Move_Move
+    MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
+    MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
     NULL = RawAbilityId.Null_Null
     SCANNER_SWEEP = RawAbilityId.ScannerSweep_Scan
-    SMART = RawAbilityId.Smart
+    SMART = RawAbilityId.Smart  # the right-click order
     SPAWN_CHANGELING = RawAbilityId.SpawnChangeling_SpawnChangeling
     UNLOAD_ALL_BUNKER = RawAbilityId.UnloadAll_Bunker
