@@ -11,7 +11,6 @@ from sc2nachos.ids.raw import RawUpgradeId
 class UpgradeId(ReadableIntEnum):
     """Upgrade ids used in multiplayer games."""
 
-    ADVANCED_BALLISTICS = RawUpgradeId.LiberatorAGRangeUpgrade  # the liberator range upgrade
     BANSHEE_CLOAK = RawUpgradeId.BansheeCloak  # "Cloaking Field" in game
     BANSHEE_SPEED = RawUpgradeId.BansheeSpeed  # "Hyperflight Rotors" in game
     BUILDING_ARMOR = RawUpgradeId.TerranBuildingArmor
@@ -26,6 +25,7 @@ class UpgradeId(ReadableIntEnum):
     INFANTRY_WEAPONS_1 = RawUpgradeId.TerranInfantryWeaponsLevel1
     INFANTRY_WEAPONS_2 = RawUpgradeId.TerranInfantryWeaponsLevel2
     INFANTRY_WEAPONS_3 = RawUpgradeId.TerranInfantryWeaponsLevel3
+    LIBERATOR_RANGE = RawUpgradeId.LiberatorAGRangeUpgrade  # "Advanced Ballistics" in game
     MEDIVAC_SPEED_BOOST = RawUpgradeId.MedivacIncreaseSpeedBoost  # "Rapid Reignition System" in game
     PERSONAL_CLOAKING = RawUpgradeId.PersonalCloaking
     RAVEN_RECALIBRATED_EXPLOSIVES = RawUpgradeId.RavenRecalibratedExplosives
