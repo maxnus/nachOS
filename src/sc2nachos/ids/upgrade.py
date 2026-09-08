@@ -17,7 +17,6 @@ class UpgradeId(ReadableIntEnum):
     COMBAT_SHIELD = RawUpgradeId.ShieldWall
     CONCUSSIVE_SHELLS = RawUpgradeId.PunisherGrenades
     DRILLING_CLAWS = RawUpgradeId.DrillClaws
-    ENHANCED_SHOCKWAVES = RawUpgradeId.EnhancedShockwaves
     HISEC_AUTO_TRACKING = RawUpgradeId.HiSecAutoTracking
     INFANTRY_ARMOR_1 = RawUpgradeId.TerranInfantryArmorsLevel1
     INFANTRY_ARMOR_2 = RawUpgradeId.TerranInfantryArmorsLevel2
