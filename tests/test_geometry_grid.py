@@ -140,6 +140,33 @@ class TestOutsidePropagation:
         assert abs(-left).outside == 2.0
         assert (~Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0), outside=False)).outside is True
 
+    def test_cropping_keeps_it_over_less_ground(self) -> None:
+        left, _ = self.grids()
+        assert left.cropped(Rectangle(1, 1, 2, 2)).outside == 2.0
+
+    def test_where_lets_the_condition_choose_off_the_grid_too(self) -> None:
+        left, right = self.grids()
+        always = Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0), outside=True)
+        never = always.with_outside(False)
+        assert left.where(always, right).outside == 2.0
+        assert left.where(never, right).outside == 3.0
+        assert left.where(never, 9.0).outside == 9.0
+
+    def test_where_drops_it_when_the_condition_has_none(self) -> None:
+        left, right = self.grids()
+        undeclared = Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0))
+        assert left.where(undeclared, right).outside is None
+
+    def test_the_operations_that_cannot_carry_one_take_one(self) -> None:
+        pathable = Grid(numpy.ones((4, 4), dtype=bool), origin=Tile(0, 0), outside=False)
+        assert pathable.distance_transform().outside is None
+        assert pathable.distance_transform(outside=0.0).outside == 0.0
+        left, _ = self.grids()
+        assert left.smoothed(1.0).outside is None
+        assert left.smoothed(1.0, outside=0.0).outside == 0.0
+        assert left.distance_from(Point((1.5, 1.5))).outside is None
+        assert left.distance_from(Point((1.5, 1.5)), outside=0.0).outside == 0.0
+
     def test_copy_keeps_it(self) -> None:
         left, _ = self.grids()
         assert left.copy().outside == 2.0
