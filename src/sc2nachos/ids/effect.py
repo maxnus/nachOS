@@ -11,5 +11,5 @@ from sc2nachos.ids.raw import RawEffectId
 class EffectId(ReadableIntEnum):
     """Effect ids used in multiplayer games."""
 
-    PSISTORMPERSISTENT = RawEffectId.PsiStormPersistent
-    RAVAGERCORROSIVEBILECP = RawEffectId.RavagerCorrosiveBileCP
+    PSI_STORM = RawEffectId.PsiStormPersistent
+    RAVAGER_CORROSIVE_BILE = RawEffectId.RavagerCorrosiveBileCP

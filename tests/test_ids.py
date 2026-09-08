@@ -80,11 +80,11 @@ def test_known_ids_have_expected_values() -> None:
     """A handful of ids pinned against the game's own numbering, as a canary for a bad regeneration."""
     assert UnitTypeId.SCV == 45
     assert UnitTypeId.MARINE == 48
-    assert UnitTypeId.COMMANDCENTER == 18
+    assert UnitTypeId.COMMAND_CENTER == 18
     assert AbilityId.SMART == 1
 
 
 def test_renaming_preserves_identity() -> None:
     """A curated name is free to differ from Blizzard's while still being the same id."""
-    assert RawUnitTypeId.LurkerMP == UnitTypeId.LURKERMP
-    assert RawUnitTypeId.Lurker != UnitTypeId.LURKERMP
+    assert RawUnitTypeId.LurkerMP == UnitTypeId.LURKER
+    assert RawUnitTypeId.Lurker != UnitTypeId.LURKER
