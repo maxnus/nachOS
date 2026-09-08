@@ -228,7 +228,17 @@ class Grid[T: float]:
     def where(self, condition: Grid[bool], other: T | Grid[T]) -> Grid[T]:
         """This grid where `condition` holds, and `other` everywhere else."""
         values = self._aligned(other) if isinstance(other, Grid) else other
-        return Grid(numpy.where(self._aligned(condition), self._data, values), origin=self._origin)
+        # Chosen first: `_aligned` is what rejects a condition that is not a grid, and the off-grid
+        # value reads `condition._outside`, which only means anything once that check has passed.
+        chosen = numpy.where(self._aligned(condition), self._data, values)
+        return Grid(chosen, origin=self._origin, outside=self._where_outside(condition, other))
+
+    def _where_outside(self, condition: Grid[bool], other: T | Grid[T]) -> T | None:
+        """The off-grid value `where` carries: the condition picks between the operands off the grid too."""
+        chosen = self if condition._outside else other
+        if isinstance(chosen, Grid):
+            return None if condition._outside is None else chosen._outside
+        return None if condition._outside is None or self._outside is None else chosen
 
     def minimum(self, other: Grid[T]) -> Grid[T]:
         """The smaller of the two values on each tile."""
@@ -242,36 +252,45 @@ class Grid[T: float]:
         """An independent grid over the tiles `rectangle` covers, clipped to the ones this grid holds."""
         x, y = self._slices(rectangle)
         origin = Tile(self._origin[0] + x.start, self._origin[1] + y.start)
-        return Grid(self._data[x, y].copy(), origin=origin)
+        return Grid(self._data[x, y].copy(), origin=origin, outside=self._outside)
 
-    def distance_from(self, point: PointLike) -> Grid[float]:
-        """The distance from each tile's center to `point`."""
+    def distance_from(self, point: PointLike, *, outside: float | None = None) -> Grid[float]:
+        """The distance from each tile's center to `point`.
+
+        The result is not derived tile by tile from this grid, so `outside` is given rather than carried.
+        """
         position = coordinates(point)
         xs = numpy.arange(self.width) + self._origin[0] + 0.5 - position[0]
         ys = numpy.arange(self.height) + self._origin[1] + 0.5 - position[1]
-        return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin)
+        return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin, outside=outside)
 
-    def distance_transform(self: Grid[bool]) -> Grid[float]:
-        """For each true tile, the distance to the nearest false one; zero on a false tile."""
+    def distance_transform(self: Grid[bool], *, outside: float | None = None) -> Grid[float]:
+        """For each true tile, the distance to the nearest false one; zero on a false tile.
+
+        Every tile's value depends on the whole grid, so `outside` is given rather than carried: what lies
+        beyond the edge is the caller's to say, not this grid's to infer.
+        """
         distances = scipy.ndimage.distance_transform_edt(self._data, return_indices=False)
-        return Grid(numpy.asarray(distances), origin=self._origin)
+        return Grid(numpy.asarray(distances), origin=self._origin, outside=outside)
 
-    def smoothed(self, sigma: float, *, within: Grid[bool] | None = None) -> Grid[float]:
+    def smoothed(self, sigma: float, *, within: Grid[bool] | None = None, outside: float | None = None) -> Grid[float]:
         """A Gaussian blur of the values, `sigma` measured in tiles.
 
         Given `within`, only those tiles contribute and the result is renormalized, so values near the edge
         of the region are not dragged down by the tiles outside it. A tile no contributor reaches keeps its
         own value.
+
+        Each tile draws on its neighbours, so `outside` is given rather than carried.
         """
         values = self._data.astype(float)
         if within is None:
-            return Grid(scipy.ndimage.gaussian_filter(values, sigma=sigma), origin=self._origin)
+            return Grid(scipy.ndimage.gaussian_filter(values, sigma=sigma), origin=self._origin, outside=outside)
         weights = self._mask(within).astype(float)
         numerator = scipy.ndimage.gaussian_filter(values * weights, sigma=sigma)
         denominator = scipy.ndimage.gaussian_filter(weights, sigma=sigma)
         blurred = values.copy()
         numpy.divide(numerator, denominator, out=blurred, where=denominator > 0)
-        return Grid(blurred, origin=self._origin)
+        return Grid(blurred, origin=self._origin, outside=outside)
 
     # --- Summaries
 
@@ -316,9 +335,9 @@ class Grid[T: float]:
         else:
             return NotImplemented
         left, right = (values, self._data) if flip else (self._data, values)
-        return Grid(op(left, right), origin=self._origin, outside=self._outside_after(other, op, flip=flip))
+        return Grid(op(left, right), origin=self._origin, outside=self._combine_outside(other, op, flip=flip))
 
-    def _outside_after(self, other: object, op: Callable[..., ndarray], *, flip: bool) -> T | None:
+    def _combine_outside(self, other: object, op: Callable[..., ndarray], *, flip: bool) -> T | None:
         """The off-grid value the result carries, or None if either operand has none.
 
         A pointwise operation answers off the grid the way it answers on it, so the same `op` runs on the
