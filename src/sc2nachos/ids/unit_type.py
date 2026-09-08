@@ -188,8 +188,8 @@ class UnitTypeId(ReadableIntEnum):
     VESPENE_GEYSER_RICH = RawUnitTypeId.RichVespeneGeyser
     VESPENE_GEYSER_SHAKURAS = RawUnitTypeId.ShakurasVespeneGeyser
     VESPENE_GEYSER_SPACE_PLATFORM = RawUnitTypeId.SpacePlatformGeyser
-    VIKING_ASSAULT = RawUnitTypeId.VikingAssault
-    VIKING_FIGHTER = RawUnitTypeId.VikingFighter
+    VIKING = RawUnitTypeId.VikingFighter
+    VIKING_LANDED = RawUnitTypeId.VikingAssault
     VIPER = RawUnitTypeId.Viper
     VOID_RAY = RawUnitTypeId.VoidRay
     WARP_GATE = RawUnitTypeId.WarpGate
