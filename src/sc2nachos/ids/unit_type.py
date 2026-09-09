@@ -311,11 +311,6 @@ class UnitTypeId(ReadableIntEnum):
     PHOENIX = RawUnitTypeId.Phoenix
     PHOTON_CANNON = RawUnitTypeId.PhotonCannon
     PLANETARY_FORTRESS = RawUnitTypeId.PlanetaryFortress
-    PRISON_CONSOLE_XEL_NAGA = RawUnitTypeId.XelNagaPrisonConsole
-    PRISON_HEIGHT_2_XEL_NAGA = RawUnitTypeId.XelNagaPrisonHeight2
-    PRISON_NORTH_HEIGHT_2_XEL_NAGA = RawUnitTypeId.XelNagaPrisonNorthHeight2
-    PRISON_NORTH_XEL_NAGA = RawUnitTypeId.XelNagaPrisonNorth
-    PRISON_XEL_NAGA = RawUnitTypeId.XelNagaPrison
     PROBE = RawUnitTypeId.Probe
     PURIFICATION_NOVA = RawUnitTypeId.DisruptorPhased
     PYLON = RawUnitTypeId.Pylon
@@ -366,11 +361,6 @@ class UnitTypeId(ReadableIntEnum):
     TECH_LAB_STARPORT = RawUnitTypeId.StarportTechLab
     TEMPEST = RawUnitTypeId.Tempest
     TEMPLAR_ARCHIVE = RawUnitTypeId.TemplarArchive
-    TEMPLE_DOOR_BURROWED_XEL_NAGA = RawUnitTypeId.XelNagaTempleDoorBurrowed
-    TEMPLE_DOOR_URDL_BURROWED_XEL_NAGA = RawUnitTypeId.XelNagaTempleDoorURDLBurrowed
-    TEMPLE_DOOR_URDL_XEL_NAGA = RawUnitTypeId.XelNagaTempleDoorURDL
-    TEMPLE_DOOR_XEL_NAGA = RawUnitTypeId.XelNagaTempleDoor
-    TEMPLE_XEL_NAGA = RawUnitTypeId.XelNagaTemple
     THOR = RawUnitTypeId.Thor
     THOR_HIGH_IMPACT = RawUnitTypeId.ThorAP
     TWILIGHT_COUNCIL = RawUnitTypeId.TwilightCouncil
@@ -383,7 +373,6 @@ class UnitTypeId(ReadableIntEnum):
     UNBUILDABLE_UNIT_BRICKS = RawUnitTypeId.UnbuildableBricksUnit
     UNBUILDABLE_UNIT_PLATES = RawUnitTypeId.UnbuildablePlatesUnit
     UNBUILDABLE_UNIT_ROCKS = RawUnitTypeId.UnbuildableRocksUnit
-    VAULT_XEL_NAGA = RawUnitTypeId.XelNagaVault
     VESPENE_GEYSER = RawUnitTypeId.VespeneGeyser
     VESPENE_GEYSER_PROTOSS = RawUnitTypeId.ProtossVespeneGeyser
     VESPENE_GEYSER_PURIFIER = RawUnitTypeId.PurifierVespeneGeyser
@@ -400,7 +389,6 @@ class UnitTypeId(ReadableIntEnum):
     WATCHTOWER = RawUnitTypeId.XelNagaTower
     WIDOW_MINE = RawUnitTypeId.WidowMine
     WIDOW_MINE_BURROWED = RawUnitTypeId.WidowMineBurrowed
-    WORLDSHIP_VAULT_XEL_NAGA = RawUnitTypeId.XelNagaWorldshipVault
     ZEALOT = RawUnitTypeId.Zealot
     ZERGLING = RawUnitTypeId.Zergling
     ZERGLING_BURROWED = RawUnitTypeId.ZerglingBurrowed
