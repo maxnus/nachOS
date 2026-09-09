@@ -15,8 +15,8 @@ class EffectId(ReadableIntEnum):
     COLOSSUS_BEAM = RawEffectId.ThermalLancesForward  # "Thermal Lances" in game
     CORROSIVE_BILE = RawEffectId.RavagerCorrosiveBileCP
     GUARDIAN_SHIELD = RawEffectId.GuardianShieldPersistent
-    LIBERATOR_ZONE = RawEffectId.LiberatorTargetMorphPersistent
-    LIBERATOR_ZONE_PENDING = RawEffectId.LiberatorTargetMorphDelayPersistent  # placed, firing in 2 seconds
+    LIBERATION_ZONE = RawEffectId.LiberatorTargetMorphPersistent
+    LIBERATION_ZONE_PENDING = RawEffectId.LiberatorTargetMorphDelayPersistent  # placed, firing in 2 seconds
     LURKER_SPINES = RawEffectId.LurkerMP
     NUKE = RawEffectId.NukePersistent
     PSI_STORM = RawEffectId.PsiStormPersistent
