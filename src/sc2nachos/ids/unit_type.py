@@ -298,7 +298,7 @@ class UnitTypeId(ReadableIntEnum):
     NYDUS_NETWORK = RawUnitTypeId.NydusNetwork
     NYDUS_WORM = RawUnitTypeId.NydusCanal
     OBSERVER = RawUnitTypeId.Observer
-    OBSERVER_SURVEILLANCE = RawUnitTypeId.ObserverSiegeMode
+    OBSERVER_SIEGED = RawUnitTypeId.ObserverSiegeMode
     ORACLE = RawUnitTypeId.Oracle
     ORBITAL_COMMAND = RawUnitTypeId.OrbitalCommand
     ORBITAL_COMMAND_FLYING = RawUnitTypeId.OrbitalCommandFlying
@@ -307,7 +307,7 @@ class UnitTypeId(ReadableIntEnum):
     OVERLORD_TRANSPORT = RawUnitTypeId.OverlordTransport
     OVERLORD_TRANSPORT_COCOON = RawUnitTypeId.TransportOverlordCocoon
     OVERSEER = RawUnitTypeId.Overseer
-    OVERSEER_OVERSIGHT = RawUnitTypeId.OverseerSiegeMode
+    OVERSEER_SIEGED = RawUnitTypeId.OverseerSiegeMode
     PHOENIX = RawUnitTypeId.Phoenix
     PHOTON_CANNON = RawUnitTypeId.PhotonCannon
     PLANETARY_FORTRESS = RawUnitTypeId.PlanetaryFortress
