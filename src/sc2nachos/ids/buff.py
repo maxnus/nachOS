@@ -11,6 +11,9 @@ from sc2nachos.ids.raw import RawBuffId
 class BuffId(ReadableIntEnum):
     """Buff ids used in multiplayer games."""
 
+    CARRYING_GAS = RawBuffId.CarryHarvestableVespeneGeyserGas
+    CARRYING_GAS_PROTOSS = RawBuffId.CarryHarvestableVespeneGeyserGasProtoss
+    CARRYING_GAS_ZERG = RawBuffId.CarryHarvestableVespeneGeyserGasZerg
     CARRYING_MINERALS = RawBuffId.CarryMineralFieldMinerals
     CARRYING_MINERALS_RICH = RawBuffId.CarryHighYieldMineralFieldMinerals
     CONCUSSIVE_SHELLS_SLOW = RawBuffId.DutchMarauderSlow
