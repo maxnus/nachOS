@@ -11,6 +11,8 @@ from sc2nachos.ids.raw import RawBuffId
 class BuffId(ReadableIntEnum):
     """Buff ids used in multiplayer games."""
 
+    CARRYING_MINERALS = RawBuffId.CarryMineralFieldMinerals
+    CARRYING_MINERALS_RICH = RawBuffId.CarryHighYieldMineralFieldMinerals
     CONCUSSIVE_SHELLS_SLOW = RawBuffId.DutchMarauderSlow
     GUARDIAN_SHIELD = RawBuffId.GuardianShield
     IMMORTAL_BARRIER = RawBuffId.ImmortalOverload
