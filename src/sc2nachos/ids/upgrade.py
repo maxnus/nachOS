@@ -88,9 +88,9 @@ class UpgradeId(ReadableIntEnum):
     ZERG_AIR_WEAPONS_1 = RawUpgradeId.ZergFlyerWeaponsLevel1
     ZERG_AIR_WEAPONS_2 = RawUpgradeId.ZergFlyerWeaponsLevel2
     ZERG_AIR_WEAPONS_3 = RawUpgradeId.ZergFlyerWeaponsLevel3
-    ZERG_ARMOR_1 = RawUpgradeId.ZergGroundArmorsLevel1
-    ZERG_ARMOR_2 = RawUpgradeId.ZergGroundArmorsLevel2
-    ZERG_ARMOR_3 = RawUpgradeId.ZergGroundArmorsLevel3
+    ZERG_GROUND_ARMOR_1 = RawUpgradeId.ZergGroundArmorsLevel1
+    ZERG_GROUND_ARMOR_2 = RawUpgradeId.ZergGroundArmorsLevel2
+    ZERG_GROUND_ARMOR_3 = RawUpgradeId.ZergGroundArmorsLevel3
     ZERG_MELEE_WEAPONS_1 = RawUpgradeId.ZergMeleeWeaponsLevel1
     ZERG_MELEE_WEAPONS_2 = RawUpgradeId.ZergMeleeWeaponsLevel2
     ZERG_MELEE_WEAPONS_3 = RawUpgradeId.ZergMeleeWeaponsLevel3
