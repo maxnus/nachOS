@@ -11,9 +11,14 @@ from sc2nachos.ids.raw import RawBuffId
 class BuffId(ReadableIntEnum):
     """Buff ids used in multiplayer games."""
 
-    DUTCHMARAUDERSLOW = RawBuffId.DutchMarauderSlow
-    GUARDIANSHIELD = RawBuffId.GuardianShield
-    IMMORTALOVERLOAD = RawBuffId.ImmortalOverload
+    CARRYING_GAS = RawBuffId.CarryHarvestableVespeneGeyserGas
+    CARRYING_GAS_PROTOSS = RawBuffId.CarryHarvestableVespeneGeyserGasProtoss
+    CARRYING_GAS_ZERG = RawBuffId.CarryHarvestableVespeneGeyserGasZerg
+    CARRYING_MINERALS = RawBuffId.CarryMineralFieldMinerals
+    CARRYING_MINERALS_RICH = RawBuffId.CarryHighYieldMineralFieldMinerals
+    CONCUSSIVE_SHELLS_SLOW = RawBuffId.DutchMarauderSlow
+    GUARDIAN_SHIELD = RawBuffId.GuardianShield
+    IMMORTAL_BARRIER = RawBuffId.ImmortalOverload
     SLOW = RawBuffId.Slow
     STIMPACK = RawBuffId.Stimpack
-    STIMPACKMARAUDER = RawBuffId.StimpackMarauder
+    STIMPACK_MARAUDER = RawBuffId.StimpackMarauder
