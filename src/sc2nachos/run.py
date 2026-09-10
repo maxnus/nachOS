@@ -11,8 +11,11 @@ from sc2nachos.protocol import Client, GamePorts, RecordingTransport, Transport,
 
 
 @dataclass(frozen=True, slots=True)
-class Bot:
-    """A player this library drives: the api that plays it, as which race, and under what name."""
+class ApiBot:
+    """A player driven by an api of ours, as which race and under what name.
+
+    The other kind of player is a `Computer`, which the game drives itself and which needs no client.
+    """
 
     api: Api
     race: Race
@@ -21,7 +24,7 @@ class Bot:
 
 def run_local(
     game_map: Map | str,
-    players: Sequence[Bot | Computer],
+    players: Sequence[ApiBot | Computer],
     *,
     realtime: bool = False,
     time_limit: float | None = None,
@@ -32,7 +35,7 @@ def run_local(
 ) -> Result:
     """Start a game client, create a match on `game_map` between `players`, and play it out.
 
-    Exactly one player is a `Bot`, because one client plays one player. The client is stopped and its
+    Exactly one player is an `ApiBot`, because one client plays one player. The client is stopped and its
     temporary directory removed however the game ends.
     """
     bot = _only_bot(players)
@@ -40,7 +43,7 @@ def run_local(
         installation = installation or Installation.find()
         game_map = Map.find(game_map, installation=installation)
     # A participant tells the game that a client will fill the slot; who fills it is settled at the join.
-    setups: list[Player] = [Participant() if isinstance(player, Bot) else player for player in players]
+    setups: list[Player] = [Participant() if isinstance(player, ApiBot) else player for player in players]
 
     with GameProcess.launch(installation, window=window) as game:
         client = _connect(game.url, record_to)
@@ -55,7 +58,7 @@ def run_local(
 
 
 def run_ladder(
-    bot: Bot,
+    bot: ApiBot,
     *,
     host: str,
     port: int,
@@ -80,9 +83,9 @@ def run_ladder(
         client.close()
 
 
-def _only_bot(players: Sequence[Bot | Computer]) -> Bot:
+def _only_bot(players: Sequence[ApiBot | Computer]) -> ApiBot:
     """The player this process plays. Two of them would need a client each, which is not supported yet."""
-    bots = [player for player in players if isinstance(player, Bot)]
+    bots = [player for player in players if isinstance(player, ApiBot)]
     if len(bots) != 1:
         raise ValueError(f"one process plays exactly one bot, and {len(bots)} were given")
     return bots[0]
