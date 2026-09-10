@@ -23,7 +23,7 @@ from sc2nachos.launch import (
 )
 from sc2nachos.launch._process import launch_command
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, Status, WebSocketTransport
+from sc2nachos.protocol import Client, RecordingTransport, ReplayTransport, Status, WebSocketTransport
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
 _LADDER_MAP = "PylonAIE"
@@ -320,6 +320,40 @@ class TestAgainstTheRealGame:
             client.quit()
             client.close()
         assert not game.is_running
+
+    def test_a_recorded_game_replays_exactly(self, tmp_path: Path) -> None:
+        """A recording is the corpus everything above the protocol is tested against, so it must be faithful."""
+        try:
+            game_map = Map.find(_LADDER_MAP)
+        except MapNotFoundError as missing:
+            pytest.skip(str(missing))
+
+        opponent = Computer(race=Race.ZERG, difficulty=Difficulty.VERY_EASY)
+        path = tmp_path / "game.sc2rec"
+        with GameProcess.launch(window=(640, 480)) as game:
+            recorder = RecordingTransport(WebSocketTransport.connect(game.url), path)
+            client = Client(recorder)
+            client.create_game(game_map.path, [Participant(), opponent])
+            client.join_game(Race.TERRAN, name="NachOS")
+            info = client.game_info()
+            loops = []
+            for _ in range(20):
+                loops.append(client.observation().observation.game_loop)
+                client.step(16)
+            client.leave_game()
+            client.quit()
+            client.close()
+
+        # Twenty observations weigh well over a megabyte on the wire, which is the whole reason for compressing.
+        assert path.stat().st_size < 500_000
+
+        replayed = Client(ReplayTransport(recorder.recording))
+        replayed.create_game(game_map.path, [Participant(), opponent])
+        assert replayed.join_game(Race.TERRAN) == 1
+        assert replayed.game_info() == info
+        for loop in loops:
+            assert replayed.observation().observation.game_loop == loop
+            replayed.step(16)
 
 
 class TestLaunchCleansUpAfterItself:

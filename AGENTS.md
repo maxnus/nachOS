@@ -142,6 +142,10 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **A participant's race and name come from the join, not from the create.** `PlayerSetup.race` is used only for
   a computer player, as its proto comment says: a game created with a bare `Participant` and joined as Terran
   reports `race_actual` Terran, and `race_actual` is populated only for your own player.
+- **A recorded game is enormous raw and tiny compressed.** A full bare game is 771 exchanges and 63 MB, of
+  which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
+  default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one
+  observation. xz is also the fastest to read back here, since most of the output is long match copies.
 - **Map packs install alongside the maps they replace**, so one map name really does match several files --
   `MagannathaAIE_v2.SC2Map` sits in both `Maps/` and `Maps/AIE/`. A lookup by name must resolve that rather than
   refuse it.
