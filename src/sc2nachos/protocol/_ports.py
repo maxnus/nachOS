@@ -5,13 +5,30 @@ from typing import Self
 
 
 @dataclass(frozen=True, slots=True)
-class GamePorts:
-    """A `(game, base)` port pair for the server, and one for each player in the match."""
+class PortPair:
+    """The pair of ports SC2 needs for one connection.
 
-    server: tuple[int, int]
-    players: tuple[tuple[int, int], ...]
+    Every participant in a match must send the same ports in the same order, or the join fails.
+    """
+
+    game: int
+    base: int
+
+
+@dataclass(frozen=True, slots=True)
+class GamePorts:
+    """The ports every participant in a multiplayer game must agree on.
+
+    One pair for the participant hosting the match, and one for each guest.
+    """
+
+    server: PortPair
+    players: tuple[PortPair, ...]
 
     @classmethod
     def from_start_port(cls, start_port: int) -> Self:
         """The ladder's layout: five consecutive ports from `start_port`, of which the first goes unused."""
-        return cls(server=(start_port + 2, start_port + 3), players=((start_port + 4, start_port + 5),))
+        return cls(
+            server=PortPair(start_port + 2, start_port + 3),
+            players=(PortPair(start_port + 4, start_port + 5),),
+        )

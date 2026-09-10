@@ -95,9 +95,10 @@ class Client:
         if name is not None:
             request.player_name = name
         if ports is not None:
-            request.server_ports.game_port, request.server_ports.base_port = ports.server
-            for game_port, base_port in ports.players:
-                request.client_ports.add(game_port=game_port, base_port=base_port)
+            request.server_ports.game_port = ports.server.game
+            request.server_ports.base_port = ports.server.base
+            for pair in ports.players:
+                request.client_ports.add(game_port=pair.game, base_port=pair.base)
 
         response = self._send(sc2api_pb2.Request(join_game=request))
         if not response.HasField("join_game"):

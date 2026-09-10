@@ -14,6 +14,7 @@ from sc2nachos.protocol import (
     ConnectionTimeoutError,
     GameEndedError,
     GamePorts,
+    PortPair,
     ProtocolError,
     Status,
     WebSocketTransport,
@@ -286,4 +287,6 @@ class TestWebSocketTransport:
 
 class TestGamePorts:
     def test_the_ladder_layout_skips_the_first_port(self) -> None:
-        assert GamePorts.from_start_port(5000) == GamePorts(server=(5002, 5003), players=((5004, 5005),))
+        assert GamePorts.from_start_port(5000) == GamePorts(
+            server=PortPair(5002, 5003), players=(PortPair(5004, 5005),)
+        )
