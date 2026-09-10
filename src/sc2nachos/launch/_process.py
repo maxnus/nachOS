@@ -87,10 +87,12 @@ class GameProcess:
     ) -> Self:
         """Start a client and return it once it is listening."""
         installation = installation or Installation.find()
+        # Resolved before anything is created, so a build that does not exist leaves nothing to clean up.
+        executable = installation.executable(base_build=base_build)
         port = port or free_port()
         temp_directory = Path(tempfile.mkdtemp(prefix="sc2nachos-"))
         command = launch_command(
-            installation.executable(base_build=base_build),
+            executable,
             data_directory=installation.base,
             temp_directory=temp_directory,
             host=host,
@@ -101,7 +103,7 @@ class GameProcess:
         )
         logger.info("Starting StarCraft II on port {}", port)
         try:
-            process = subprocess.Popen(command, cwd=installation.working_directory(), stderr=subprocess.DEVNULL)
+            process = subprocess.Popen(command, cwd=installation.working_directory, stderr=subprocess.DEVNULL)
         except OSError as error:
             shutil.rmtree(temp_directory, ignore_errors=True)
             raise GameLaunchError(f"could not start {command[0]}: {error}") from error

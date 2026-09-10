@@ -3,7 +3,7 @@
 import os
 import platform
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
@@ -14,6 +14,10 @@ MINIMUM_BASE_BUILD = 55958
 
 _VERSIONS = "Versions"
 _BASE_PREFIX = "Base"
+
+
+class UnsupportedPlatformError(Exception):
+    """StarCraft II does not run on the platform asked for."""
 
 
 class InstallationNotFoundError(Exception):
@@ -56,35 +60,47 @@ _PLATFORMS = {
 }
 
 
+def _settings(system: str) -> _Platform:
+    """How `system` lays an installation out, or a refusal naming what was asked for."""
+    try:
+        return _PLATFORMS[system]
+    except KeyError:
+        raise UnsupportedPlatformError(f"{system} is not a platform StarCraft II runs on") from None
+
+
 @dataclass(frozen=True, slots=True)
 class Installation:
     """A StarCraft II installation directory, and the things inside it this library needs.
 
-    Wine and WSL are not supported: run the native client for the platform you are on.
+    `system` decides the layout and defaults to the one this process runs on. Wine and WSL are not supported:
+    run the native client for the platform you are on.
     """
 
     base: Path
+    system: str = field(default_factory=platform.system)
+
+    def __post_init__(self) -> None:
+        _settings(self.system)
 
     @classmethod
     def find(cls, *, system: str | None = None) -> Self:
         """Locate the installation: `SC2PATH`, then the launcher's own record of it, then the platform default."""
         system = system or platform.system()
-        if system not in _PLATFORMS:
-            raise InstallationNotFoundError(f"{system} is not a platform StarCraft II runs on")
-        settings = _PLATFORMS[system]
-
-        for candidate in (os.environ.get("SC2PATH"), cls._from_execute_info(settings), settings.default_base):
+        settings = _settings(system)
+        # An SC2PATH set to nothing is not a path to anywhere, and `Path("")` is the working directory.
+        candidates = (os.environ.get("SC2PATH") or None, cls._from_execute_info(settings), settings.default_base)
+        for candidate in candidates:
             if candidate is None:
                 continue
             base = Path(candidate).expanduser()
             if base.is_dir():
                 logger.info("Found StarCraft II at {}", base)
-                return cls(base)
+                return cls(base, system)
         raise InstallationNotFoundError(
             f"no StarCraft II installation at {settings.default_base}; set SC2PATH to where it is"
         )
 
-    def executable(self, *, base_build: int | None = None, system: str | None = None) -> Path:
+    def executable(self, *, base_build: int | None = None) -> Path:
         """The client binary, for `base_build` or for the newest build installed."""
         builds = self.builds()
         if not builds:
@@ -97,8 +113,7 @@ class Installation:
             raise GameVersionError(
                 f"build {base_build} predates the raw interface; {MINIMUM_BASE_BUILD} or newer is required"
             )
-        settings = _PLATFORMS[system or platform.system()]
-        return self.base / _VERSIONS / f"{_BASE_PREFIX}{base_build}" / settings.executable
+        return self.base / _VERSIONS / f"{_BASE_PREFIX}{base_build}" / _settings(self.system).executable
 
     def builds(self) -> frozenset[int]:
         """Every base build installed, by number."""
@@ -111,12 +126,11 @@ class Installation:
             if entry.is_dir() and re.fullmatch(rf"{_BASE_PREFIX}\d+", entry.name)
         )
 
-    def working_directory(self, *, system: str | None = None) -> Path | None:
+    @property
+    def working_directory(self) -> Path | None:
         """The directory the client must be started from, where the platform demands one."""
-        settings = _PLATFORMS[system or platform.system()]
-        if settings.working_directory is None:
-            return None
-        return self.base / settings.working_directory
+        directory = _settings(self.system).working_directory
+        return None if directory is None else self.base / directory
 
     @property
     def maps(self) -> Path:

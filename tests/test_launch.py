@@ -3,6 +3,7 @@
 import socket
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,13 +16,14 @@ from sc2nachos.launch import (
     GameVersionError,
     Installation,
     InstallationNotFoundError,
+    UnsupportedPlatformError,
     free_port,
 )
 from sc2nachos.launch._process import launch_command
 from sc2nachos.protocol import Client, WebSocketTransport
 
 
-def make_install(root: Path, *builds: int, maps: str = "Maps") -> Installation:
+def make_install(root: Path, *builds: int, maps: str = "Maps", system: str = "Windows") -> Installation:
     """A directory tree shaped like an installation, holding `builds` and nothing real."""
     for build in builds:
         version = root / "Versions" / f"Base{build}"
@@ -29,7 +31,7 @@ def make_install(root: Path, *builds: int, maps: str = "Maps") -> Installation:
         (version / "SC2_x64.exe").write_bytes(b"")
         (version / "SC2_x64").write_bytes(b"")
     (root / maps).mkdir(parents=True, exist_ok=True)
-    return Installation(root)
+    return Installation(root, system)
 
 
 @pytest.fixture
@@ -81,35 +83,48 @@ class TestFinding:
             Installation.find(system="Darwin")
 
     def test_an_unsupported_platform_is_named(self) -> None:
-        with pytest.raises(InstallationNotFoundError, match="Java"):
+        with pytest.raises(UnsupportedPlatformError, match="Java"):
             Installation.find(system="Java")
+
+    def test_an_unsupported_platform_is_refused_at_construction(self, tmp_path: Path) -> None:
+        """The platform decides the layout, so an installation cannot hold one nobody supports."""
+        with pytest.raises(UnsupportedPlatformError, match="Plan9"):
+            Installation(tmp_path, "Plan9")
+
+    def test_an_empty_sc2path_is_not_a_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`Path("")` is the working directory, which would otherwise pass for an installation."""
+        monkeypatch.setenv("SC2PATH", "")
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        monkeypatch.setenv("HOME", str(tmp_path))
+        with pytest.raises(InstallationNotFoundError):
+            Installation.find(system="Darwin")
 
 
 class TestVersions:
     def test_the_newest_build_is_the_default(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, 75689, 95841, 93333)
         assert install.builds() == {75689, 93333, 95841}
-        assert install.executable(system="Windows").parent.name == "Base95841"
+        assert install.executable().parent.name == "Base95841"
 
     def test_a_build_can_be_asked_for(self, tmp_path: Path) -> None:
-        install = make_install(tmp_path, 75689, 95841)
-        assert install.executable(base_build=75689, system="Linux").parent.name == "Base75689"
+        install = make_install(tmp_path, 75689, 95841, system="Linux")
+        assert install.executable(base_build=75689).parent.name == "Base75689"
 
     def test_an_absent_build_lists_what_is_there(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, 95841)
         with pytest.raises(GameVersionError, match=r"95299 is not installed.*\[95841\]"):
-            install.executable(base_build=95299, system="Windows")
+            install.executable(base_build=95299)
 
     def test_a_build_older_than_the_raw_interface_is_refused(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, MINIMUM_BASE_BUILD - 1)
         with pytest.raises(GameVersionError, match="raw interface"):
-            install.executable(system="Windows")
+            install.executable()
 
     def test_an_installation_without_versions_is_not_one(self, tmp_path: Path) -> None:
-        install = Installation(tmp_path)
+        install = Installation(tmp_path, "Windows")
         assert install.builds() == frozenset()
         with pytest.raises(GameVersionError, match="Base<build>"):
-            install.executable(system="Windows")
+            install.executable()
 
     def test_directories_that_are_not_builds_are_ignored(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, 95841)
@@ -118,10 +133,9 @@ class TestVersions:
         assert install.builds() == {95841}
 
     def test_the_executable_differs_by_platform(self, tmp_path: Path) -> None:
-        install = make_install(tmp_path, 95841)
-        assert install.executable(system="Windows").name == "SC2_x64.exe"
-        assert install.executable(system="Linux").name == "SC2_x64"
-        assert install.executable(system="Darwin").name == "SC2"
+        assert make_install(tmp_path / "w", 95841, system="Windows").executable().name == "SC2_x64.exe"
+        assert make_install(tmp_path / "l", 95841, system="Linux").executable().name == "SC2_x64"
+        assert make_install(tmp_path / "d", 95841, system="Darwin").executable().name == "SC2"
 
 
 class TestLayout:
@@ -131,10 +145,9 @@ class TestLayout:
         assert make_install(tmp_path / "lower", 95841, maps="maps").maps.is_dir()
 
     def test_only_windows_needs_a_working_directory(self, tmp_path: Path) -> None:
-        install = Installation(tmp_path)
-        assert install.working_directory(system="Windows") == tmp_path / "Support64"
-        assert install.working_directory(system="Linux") is None
-        assert install.working_directory(system="Darwin") is None
+        assert Installation(tmp_path, "Windows").working_directory == tmp_path / "Support64"
+        assert Installation(tmp_path, "Linux").working_directory is None
+        assert Installation(tmp_path, "Darwin").working_directory is None
 
 
 class TestCommand:
@@ -235,3 +248,13 @@ class TestAgainstTheRealGame:
             client.quit()
             client.close()
         assert not game.is_running
+
+
+class TestLaunchCleansUpAfterItself:
+    def test_a_build_that_does_not_resolve_leaves_nothing_behind(self, tmp_path: Path) -> None:
+        """The temporary directory is created only once there is something to put in it."""
+        temporary = Path(tempfile.gettempdir())
+        before = set(temporary.glob("sc2nachos-*"))
+        with pytest.raises(GameVersionError):
+            GameProcess.launch(make_install(tmp_path, 95841), base_build=75689)
+        assert set(temporary.glob("sc2nachos-*")) == before
