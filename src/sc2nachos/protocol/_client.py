@@ -2,11 +2,13 @@
 
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
+from pathlib import Path
+from typing import Literal
 
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos.match import Race, Result
+from sc2nachos.match import Computer, Participant, Player, Race, Result
 from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, ProtocolError
 from sc2nachos.protocol._ports import GamePorts
 from sc2nachos.protocol._status import Status
@@ -16,12 +18,25 @@ from sc2nachos.protocol._transport import Transport
 _GAME_OVER_ERRORS = frozenset({"Game has already ended", "Not supported if game has already ended"})
 
 
-def _wrong_answer(field: str) -> ProtocolError:
-    """The error for a response that does not carry what its request asked for.
+# The answers this client knows how to read. Spelled out rather than taken as a `str` so that pyright checks
+# each name against the response the stubs declare, which a widened parameter would silently give up.
+type _Answer = Literal[
+    "action", "create_game", "data", "game_info", "join_game", "observation", "ping", "save_replay", "step"
+]
 
-    Each caller spells the field name out so that the protobuf stubs check it.
-    """
-    return ProtocolError(f"the game answered a {field} request without a {field} field")
+
+def _player_setup(player: Player) -> sc2api_pb2.PlayerSetup:
+    """One slot in a game being created. A participant carries nothing: it says who it is when it joins."""
+    match player:
+        case Participant():
+            return sc2api_pb2.PlayerSetup(type=sc2api_pb2.Participant)
+        case Computer(race=race, difficulty=difficulty, build=build, name=name):
+            setup = sc2api_pb2.PlayerSetup(
+                type=sc2api_pb2.Computer, race=race.value, difficulty=difficulty.value, ai_build=build.value
+            )
+            if name is not None:
+                setup.player_name = name
+            return setup
 
 
 class Client:
@@ -63,10 +78,39 @@ class Client:
 
     def ping(self) -> sc2api_pb2.ResponsePing:
         """Ask the game which version it is, which also proves the connection works."""
-        response = self._send(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
-        if not response.HasField("ping"):
-            raise _wrong_answer("ping")
+        response = self._send(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()), "ping")
         return response.ping
+
+    def create_game(
+        self,
+        map_path: Path | str,
+        players: Sequence[Player],
+        *,
+        realtime: bool = False,
+        disable_fog: bool = False,
+        random_seed: int | None = None,
+    ) -> None:
+        """Set up a match on `map_path` for `players`, which each participant then joins.
+
+        Only the client that creates the game sends this; on a ladder the game already exists.
+        """
+        request = sc2api_pb2.RequestCreateGame(
+            local_map=sc2api_pb2.LocalMap(map_path=str(map_path)),
+            player_setup=[_player_setup(player) for player in players],
+            realtime=realtime,
+            disable_fog=disable_fog,
+        )
+        if random_seed is not None:
+            request.random_seed = random_seed
+
+        response = self._send(sc2api_pb2.Request(create_game=request), "create_game")
+        created = response.create_game
+        # An unset error field reads as the first refusal the proto declares, so ask before reading it.
+        if created.HasField("error"):
+            reason = sc2api_pb2.ResponseCreateGame.Error.Name(created.error)
+            detail = created.error_details or "no detail given"
+            raise ProtocolError(f"the game refused to create the match as {reason}: {detail}")
+        logger.info("Created a game on {} for {} players", map_path, len(players))
 
     def join_game(
         self,
@@ -100,9 +144,7 @@ class Client:
             for pair in ports.players:
                 request.client_ports.add(game_port=pair.game, base_port=pair.base)
 
-        response = self._send(sc2api_pb2.Request(join_game=request))
-        if not response.HasField("join_game"):
-            raise _wrong_answer("join_game")
+        response = self._send(sc2api_pb2.Request(join_game=request), "join_game")
         joined = response.join_game
         # An unset error field reads as the first refusal the proto declares, so ask before reading it.
         if joined.HasField("error"):
@@ -116,9 +158,7 @@ class Client:
 
     def game_info(self) -> sc2api_pb2.ResponseGameInfo:
         """The map: its size, its terrain, its start locations and the players in it."""
-        response = self._send(sc2api_pb2.Request(game_info=sc2api_pb2.RequestGameInfo()))
-        if not response.HasField("game_info"):
-            raise _wrong_answer("game_info")
+        response = self._send(sc2api_pb2.Request(game_info=sc2api_pb2.RequestGameInfo()), "game_info")
         return response.game_info
 
     def game_data(
@@ -138,9 +178,7 @@ class Client:
             buff_id=buffs,
             effect_id=effects,
         )
-        response = self._send(sc2api_pb2.Request(data=request))
-        if not response.HasField("data"):
-            raise _wrong_answer("data")
+        response = self._send(sc2api_pb2.Request(data=request), "data")
         return response.data
 
     def observation(self, *, game_loop: int | None = None) -> sc2api_pb2.ResponseObservation:
@@ -161,23 +199,17 @@ class Client:
 
     def step(self, count: int) -> sc2api_pb2.ResponseStep:
         """Let the game run `count` frames. Only a stepped game needs this; a realtime one runs on its own."""
-        response = self._send(sc2api_pb2.Request(step=sc2api_pb2.RequestStep(count=count)))
-        if not response.HasField("step"):
-            raise _wrong_answer("step")
+        response = self._send(sc2api_pb2.Request(step=sc2api_pb2.RequestStep(count=count)), "step")
         return response.step
 
     def act(self, actions: Sequence[sc2api_pb2.Action]) -> sc2api_pb2.ResponseAction:
         """Send `actions`, and get back the game's verdict on each one in the order they were given."""
-        response = self._send(sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=actions)))
-        if not response.HasField("action"):
-            raise _wrong_answer("action")
+        response = self._send(sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=actions)), "action")
         return response.action
 
     def save_replay(self) -> bytes:
         """The replay of the game so far, as the bytes of a `.SC2Replay` file."""
-        response = self._send(sc2api_pb2.Request(save_replay=sc2api_pb2.RequestSaveReplay()))
-        if not response.HasField("save_replay"):
-            raise _wrong_answer("save_replay")
+        response = self._send(sc2api_pb2.Request(save_replay=sc2api_pb2.RequestSaveReplay()), "save_replay")
         return response.save_replay.data
 
     def leave_game(self) -> None:
@@ -197,12 +229,11 @@ class Client:
         request = sc2api_pb2.RequestObservation()
         if game_loop is not None:
             request.game_loop = game_loop
-        response = self._send(sc2api_pb2.Request(observation=request))
-        if not response.HasField("observation"):
-            raise _wrong_answer("observation")
+        response = self._send(sc2api_pb2.Request(observation=request), "observation")
         return response.observation
 
-    def _send(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
+    def _send(self, request: sc2api_pb2.Request, answer: _Answer | None = None) -> sc2api_pb2.Response:
+        """Send `request`, and return the response once it proves to be an `answer` the game did not refuse."""
         response = self._transport.request(request)
         # An unset status field reads as `launched`, the first value the proto declares, so ask before reading it.
         if response.HasField("status"):
@@ -215,4 +246,7 @@ class Client:
             if _GAME_OVER_ERRORS.intersection(errors):
                 raise GameEndedError(f"the game is over: {'; '.join(errors)}")
             raise ProtocolError(f"the game refused the request: {'; '.join(errors)}")
+        if answer is not None and not response.HasField(answer):
+            asked = response.WhichOneof("response") or "nothing"
+            raise ProtocolError(f"the game was asked for {answer} and answered {asked}")
         return response

@@ -1,5 +1,7 @@
 """The vocabulary of a match: who is playing, how the computer opponent behaves, and how it ended."""
 
+from dataclasses import dataclass
+
 from s2clientprotocol import common_pb2, sc2api_pb2
 
 from sc2nachos._enum import ReadableIntEnum
@@ -48,3 +50,21 @@ class AIBuild(ReadableIntEnum):
     POWER = sc2api_pb2.AIBuild.Power
     MACRO = sc2api_pb2.AIBuild.Macro
     AIR = sc2api_pb2.AIBuild.Air
+
+
+@dataclass(frozen=True, slots=True)
+class Participant:
+    """A slot for a client to join and play. Its race and name are settled at the join, not here."""
+
+
+@dataclass(frozen=True, slots=True)
+class Computer:
+    """The game's own opponent, which plays without a client of its own."""
+
+    race: Race = Race.RANDOM
+    difficulty: Difficulty = Difficulty.VERY_HARD
+    build: AIBuild = AIBuild.RANDOM
+    name: str | None = None
+
+
+type Player = Participant | Computer
