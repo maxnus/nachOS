@@ -72,6 +72,13 @@ class Client:
         return self._player_id
 
     @property
+    def result(self) -> Result | None:
+        """How the game ended for this client's own player, or `None` while it has not ended."""
+        if self._player_id is None:
+            return None
+        return self._results.get(self._player_id)
+
+    @property
     def results(self) -> Mapping[int, Result]:
         """How the game ended, by player id. Empty until it does."""
         return self._results
@@ -213,8 +220,9 @@ class Client:
         return response.save_replay.data
 
     def leave_game(self) -> None:
-        """Leave the game, which concedes it if it has not already ended."""
-        self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
+        """Leave the game, which concedes it if it has not already ended. Leaving a finished game does nothing."""
+        with suppress(GameEndedError):
+            self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
 
     def quit(self) -> None:
         """Ask the game client to exit. A connection that has already gone is not an error here."""

@@ -13,6 +13,10 @@ The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, wi
 
 Use the AvocaDOS virtual environment: `../AvocaDOS/.venv/Scripts/python.exe`. Never system Python.
 
+**`Path.read_text` and `Path.write_text` default to the locale encoding here, which is cp1252.** Pass
+`encoding="utf-8"` to both, or an em dash written back to a source file silently becomes invalid UTF-8
+and ruff refuses to read it.
+
 ## Core design rules
 
 These are the non-negotiables. They exist because this library is published for others, not just used by AvocaDOS.
@@ -142,6 +146,9 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **A participant's race and name come from the join, not from the create.** `PlayerSetup.race` is used only for
   a computer player, as its proto comment says: a game created with a bare `Participant` and joined as Terran
   reports `race_actual` Terran, and `race_actual` is populated only for your own player.
+- **`ResponseGameInfo` never changes during a game.** Byte-identical at game loops 0, 256, 1024 and 3008 on
+  the same match. python-sc2 re-asks for it on every single step, which is 77 KB a step for a message that holds
+  the map, its terrain and who is playing. Ask once, at the start.
 - **A recorded game is enormous raw and tiny compressed.** A full bare game is 771 exchanges and 63 MB, of
   which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
   default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one

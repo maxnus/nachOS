@@ -1,0 +1,186 @@
+"""The api and the two ways to run it, played out without a game wherever that is possible."""
+
+from pathlib import Path
+
+import pytest
+from s2clientprotocol import sc2api_pb2
+
+from sc2nachos import Api, NotPlayingError, run_ladder, run_local
+from sc2nachos.launch import Map, MapNotFoundError
+from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
+from sc2nachos.protocol import Client, Recording, ReplayTransport, Status, WebSocketTransport
+from support import FakeTransport, make_observation, make_response
+
+# A map from the current AIE ladder pool, which is what a test game should be played on.
+_LADDER_MAP = "PylonAIE"
+
+
+def _game(*loops: int, ending: Result | None = Result.VICTORY, stepped: bool = True) -> list[sc2api_pb2.Response]:
+    """The game's whole side of a conversation: the map, the tables, then a turn at each of `loops`.
+
+    Without an `ending` the game never says it is over, which is what a time limit is for.
+    """
+    responses = [
+        make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Somewhere")),
+        make_response(data=sc2api_pb2.ResponseData()),
+    ]
+    for index, loop in enumerate(loops):
+        final = ending is not None and index == len(loops) - 1
+        results = [(1, ending)] if final and ending is not None else []
+        status = Status.ENDED if final else Status.IN_GAME
+        responses.append(make_response(status, observation=make_observation(loop, *results)))
+        if not final and stepped:
+            responses.append(make_response(step=sc2api_pb2.ResponseStep()))
+    return responses
+
+
+def _joined(*responses: sc2api_pb2.Response) -> tuple[Client, FakeTransport]:
+    """A client that has already joined as player one, over a transport that will then answer `responses`."""
+    transport = FakeTransport(make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)), *responses)
+    client = Client(transport)
+    client.join_game(Race.TERRAN)
+    return client, transport
+
+
+def _ladder_transport() -> FakeTransport:
+    """A game that answers a join and then two turns, which is enough to run a ladder game to its end."""
+    return FakeTransport(
+        make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+        *_game(0, 2),
+        make_response(),
+    )
+
+
+class TestBeforeAGame:
+    def test_asking_a_fresh_api_for_its_client_says_there_is_no_game(self) -> None:
+        with pytest.raises(NotPlayingError, match="no game has been joined"):
+            _ = Api().client
+
+    def test_a_fresh_api_has_played_nothing(self) -> None:
+        api = Api()
+        assert api.turn == 0
+        assert api.game_loop == 0
+        assert api.time == 0
+        assert api.result is None
+
+    def test_the_step_size_is_the_one_asked_for(self) -> None:
+        assert Api(step_size=8).step_size == 8
+
+
+class TestPlaying:
+    def test_a_game_is_played_to_the_result_the_game_gives(self) -> None:
+        client, _ = _joined(*_game(0, 2, 4))
+        api = Api(step_size=2)
+        assert api.play(client) is Result.VICTORY
+        assert api.result is Result.VICTORY
+        assert api.client is client
+
+    def test_the_map_and_the_tables_are_asked_for_once(self) -> None:
+        """Neither ever changes during a game, and game_info alone is 77 KB an ask."""
+        client, transport = _joined(*_game(0, 2, 4, 6, 8))
+        Api(step_size=2).play(client)
+        kinds = [request.WhichOneof("request") for request in transport.requests]
+        assert kinds.count("game_info") == 1
+        assert kinds.count("data") == 1
+
+    def test_a_turn_is_taken_at_every_observation_but_the_one_that_ends_it(self) -> None:
+        client, _ = _joined(*_game(0, 2, 4))
+        api = Api(step_size=2)
+        api.play(client)
+        assert api.turn == 2
+        assert api.game_loop == 4
+
+    def test_the_game_is_stepped_by_the_step_size(self) -> None:
+        client, transport = _joined(*_game(0, 8, 16))
+        Api(step_size=8).play(client)
+        assert [request.step.count for request in transport.requests if request.HasField("step")] == [8, 8]
+
+    def test_the_time_played_is_the_game_loop_in_seconds(self) -> None:
+        client, _ = _joined(*_game(0, 224))
+        api = Api()
+        api.play(client)
+        assert api.time == pytest.approx(10.0)
+
+    def test_a_time_limit_ends_the_game_in_a_tie(self) -> None:
+        client, _ = _joined(*_game(0, 112, ending=None))
+        api = Api(step_size=112)
+        assert api.play(client, time_limit=5) is Result.TIE
+        assert api.turn == 1
+        assert api.game_loop == 112
+
+    def test_a_realtime_game_asks_for_the_frame_it_wants_instead_of_stepping(self) -> None:
+        """A realtime game runs whether or not anyone is watching, so there is nothing to step."""
+        client, transport = _joined(*_game(0, 4, 8, ending=Result.DEFEAT, stepped=False))
+        assert Api(step_size=4).play(client, realtime=True) is Result.DEFEAT
+        asked = [request.observation.game_loop for request in transport.requests if request.HasField("observation")]
+        assert asked == [0, 4, 8]
+        assert not any(request.HasField("step") for request in transport.requests)
+
+    def test_a_game_the_client_left_ends_undecided(self) -> None:
+        """Leaving takes the client out of the game without the game ever saying who won."""
+        client, _ = _joined(
+            make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Somewhere")),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(observation=make_observation(0)),
+            make_response(Status.ENDED, step=sc2api_pb2.ResponseStep()),
+        )
+        assert Api().play(client) is Result.UNDECIDED
+
+
+class TestRunningOnALadder:
+    def test_the_join_carries_the_ports_the_ladder_handed_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+
+        result = run_ladder(Api(step_size=2), race=Race.TERRAN, host="127.0.0.1", port=8000, start_port=1000)
+
+        assert result is Result.VICTORY
+        joined = transport.requests[0].join_game
+        assert (joined.server_ports.game_port, joined.server_ports.base_port) == (1002, 1003)
+        assert [(pair.game_port, pair.base_port) for pair in joined.client_ports] == [(1004, 1005)]
+
+    def test_no_game_is_created_because_the_ladder_already_made_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        run_ladder(Api(step_size=2), race=Race.TERRAN, host="127.0.0.1", port=8000)
+        assert not any(request.HasField("create_game") for request in transport.requests)
+        assert not transport.requests[0].join_game.HasField("server_ports")
+
+    def test_the_client_the_ladder_started_is_left_running(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The ladder owns the process it started and decides when it stops."""
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        run_ladder(Api(step_size=2), race=Race.TERRAN, host="127.0.0.1", port=8000)
+        assert not any(request.HasField("quit") for request in transport.requests)
+        assert any(request.HasField("leave_game") for request in transport.requests)
+        assert transport.closed
+
+
+@pytest.mark.integration
+class TestAgainstTheRealGame:
+    """Run with `pytest -m integration`. Plays a whole game, so it is slow and needs the game installed."""
+
+    def test_a_bare_api_plays_a_full_game_and_the_recording_replays_it(self, tmp_path: Path) -> None:
+        try:
+            Map.find(_LADDER_MAP)
+        except MapNotFoundError as missing:
+            pytest.skip(str(missing))
+
+        path = tmp_path / "game.sc2rec"
+        opponent = Computer(race=Race.ZERG, difficulty=Difficulty.VERY_HARD)
+        api = Api(step_size=16)
+        result = run_local(
+            api, _LADDER_MAP, opponent, race=Race.TERRAN, name="NachOS", record_to=path, window=(640, 480)
+        )
+        assert result in (Result.VICTORY, Result.DEFEAT)
+        assert api.turn > 100
+        assert api.time > 60
+
+        # A recording holds the whole run, setup included, so replaying it means replaying the setup too.
+        replayed = Api(step_size=16)
+        client = Client(ReplayTransport(Recording(path)))
+        client.create_game(_LADDER_MAP, [Participant(), opponent])
+        client.join_game(Race.TERRAN)
+        assert replayed.play(client) is result
+        assert replayed.turn == api.turn
+        assert replayed.game_loop == api.game_loop
