@@ -220,8 +220,11 @@ class Client:
         return response.save_replay.data
 
     def leave_game(self) -> None:
-        """Leave the game, which concedes it if it has not already ended. Leaving a finished game does nothing."""
-        with suppress(GameEndedError):
+        """Leave the game, which concedes it if it has not already ended.
+
+        Leaving a game that is already over, or whose connection has already gone, does nothing.
+        """
+        with suppress(GameEndedError, ConnectionClosedError):
             self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
 
     def quit(self) -> None:
