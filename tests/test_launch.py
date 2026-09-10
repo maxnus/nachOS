@@ -4,7 +4,7 @@ import socket
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
@@ -16,21 +16,33 @@ from sc2nachos.launch import (
     GameVersionError,
     Installation,
     InstallationNotFoundError,
+    Map,
+    MapNotFoundError,
     UnsupportedPlatformError,
     free_port,
 )
 from sc2nachos.launch._process import launch_command
-from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.match import Computer, Difficulty, Participant, Race
+from sc2nachos.protocol import Client, Status, WebSocketTransport
+
+# A map from the current AIE ladder pool, which is what a test game should be played on.
+_LADDER_MAP = "PylonAIE"
 
 
-def make_install(root: Path, *builds: int, maps: str = "Maps", system: str = "Windows") -> Installation:
-    """A directory tree shaped like an installation, holding `builds` and nothing real."""
+def make_install(
+    root: Path, *builds: int, maps: str = "Maps", map_files: Sequence[str] = (), system: str = "Windows"
+) -> Installation:
+    """A directory tree shaped like an installation, holding `builds` and `map_files` and nothing real."""
     for build in builds:
         version = root / "Versions" / f"Base{build}"
         version.mkdir(parents=True)
         (version / "SC2_x64.exe").write_bytes(b"")
         (version / "SC2_x64").write_bytes(b"")
     (root / maps).mkdir(parents=True, exist_ok=True)
+    for name in map_files:
+        game_map = root / maps / name
+        game_map.parent.mkdir(parents=True, exist_ok=True)
+        game_map.write_bytes(b"")
     return Installation(root, system)
 
 
@@ -150,6 +162,36 @@ class TestLayout:
         assert Installation(tmp_path, "Darwin").working_directory is None
 
 
+class TestMaps:
+    def test_a_map_is_found_by_name(self, tmp_path: Path) -> None:
+        install = make_install(tmp_path, map_files=["Ladder2019Season3/AcropolisLE.SC2Map"])
+        found = Map.find("AcropolisLE", installation=install)
+        assert found.name == "AcropolisLE"
+        assert found.path == install.maps / "Ladder2019Season3" / "AcropolisLE.SC2Map"
+
+    def test_the_extension_is_optional_and_the_case_is_not_read(self, tmp_path: Path) -> None:
+        install = make_install(tmp_path, map_files=["PylonAIE.SC2Map"])
+        for asked in ("PylonAIE", "PylonAIE.SC2Map", "pylonaie", "PYLONAIE.sc2map"):
+            assert Map.find(asked, installation=install).name == "PylonAIE"
+
+    def test_the_shallowest_of_several_copies_wins(self, tmp_path: Path) -> None:
+        """Map packs install alongside the maps they replace, so one name really does match twice."""
+        install = make_install(tmp_path, map_files=["AIE/TorchesAIE.SC2Map", "TorchesAIE.SC2Map"])
+        assert Map.find("TorchesAIE", installation=install).path == install.maps / "TorchesAIE.SC2Map"
+
+    def test_copies_at_one_depth_are_broken_alphabetically(self, tmp_path: Path) -> None:
+        install = make_install(tmp_path, map_files=["b/LeyLinesAIE.SC2Map", "a/LeyLinesAIE.SC2Map"])
+        assert Map.find("LeyLinesAIE", installation=install).path.parent.name == "a"
+
+    def test_a_missing_map_lists_what_is_there(self, tmp_path: Path) -> None:
+        install = make_install(tmp_path, map_files=["AIE/PylonAIE.SC2Map", "Custom/plain64.SC2Map"])
+        with pytest.raises(MapNotFoundError, match=r"no map called Acropolis.*plain64"):
+            Map.find("Acropolis", installation=install)
+
+    def test_a_map_outside_the_installation_needs_no_lookup(self, tmp_path: Path) -> None:
+        assert Map(tmp_path / "elsewhere" / "Handmade.SC2Map").name == "Handmade"
+
+
 class TestCommand:
     def _command(self, **overrides: object) -> list[str]:
         arguments: dict = {
@@ -245,6 +287,36 @@ class TestAgainstTheRealGame:
             ping = client.ping()
             assert ping.base_build >= MINIMUM_BASE_BUILD
             assert ping.game_version.endswith(str(ping.base_build))
+            client.quit()
+            client.close()
+        assert not game.is_running
+
+    def test_a_created_game_is_joined_and_stepped(self) -> None:
+        """One client against one computer: the shortest game that exercises the whole conversation."""
+        try:
+            game_map = Map.find(_LADDER_MAP)
+        except MapNotFoundError as missing:
+            pytest.skip(str(missing))
+
+        with GameProcess.launch(window=(640, 480)) as game:
+            client = Client(WebSocketTransport.connect(game.url))
+            opponent = Computer(race=Race.ZERG, difficulty=Difficulty.VERY_EASY)
+            client.create_game(game_map.path, [Participant(), opponent])
+            assert client.status is Status.INIT_GAME
+
+            assert client.join_game(Race.TERRAN, name="NachOS") == 1
+            assert client.in_game
+
+            info = client.game_info()
+            assert info.map_name
+            # Only the joining player's own race comes back, which is the one the join asked for.
+            assert {player.player_id: player.race_actual for player in info.player_info}[1] == Race.TERRAN.value
+
+            before = client.observation().observation.game_loop
+            client.step(16)
+            assert client.observation().observation.game_loop >= before + 16
+
+            client.leave_game()
             client.quit()
             client.close()
         assert not game.is_running

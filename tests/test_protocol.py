@@ -1,13 +1,14 @@
 """The protocol layer, driven entirely through the transport seam."""
 
 from collections import deque
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from s2clientprotocol import error_pb2, sc2api_pb2
 from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketTimeoutException
 
-from sc2nachos.match import Race, Result
+from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
@@ -290,3 +291,63 @@ class TestGamePorts:
         assert GamePorts.from_start_port(5000) == GamePorts(
             server=PortPair(5002, 5003), players=(PortPair(5004, 5005),)
         )
+
+
+class TestCreatingAGame:
+    def test_the_map_and_the_players_reach_the_request(self) -> None:
+        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client.create_game(Path("/sc2/Maps/PylonAIE.SC2Map"), [Participant(), Computer()])
+        request = transport.requests[0].create_game
+        assert request.local_map.map_path.endswith("PylonAIE.SC2Map")
+        assert [setup.type for setup in request.player_setup] == [sc2api_pb2.Participant, sc2api_pb2.Computer]
+
+    def test_a_participant_says_nothing_about_itself(self) -> None:
+        """The race and the name are settled at the join, and the game ignores them here."""
+        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client.create_game("map", [Participant()])
+        setup = transport.requests[0].create_game.player_setup[0]
+        assert not setup.HasField("race") and not setup.HasField("player_name")
+
+    def test_a_computer_carries_how_it_plays(self) -> None:
+        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        opponent = Computer(race=Race.ZERG, difficulty=Difficulty.HARD, build=AIBuild.RUSH, name="Roachy")
+        client.create_game("map", [Participant(), opponent])
+        setup = transport.requests[0].create_game.player_setup[1]
+        assert (setup.race, setup.difficulty, setup.ai_build) == (
+            Race.ZERG.value,
+            Difficulty.HARD.value,
+            AIBuild.RUSH.value,
+        )
+        assert setup.player_name == "Roachy"
+
+    def test_an_unnamed_computer_keeps_the_name_the_game_gives_it(self) -> None:
+        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client.create_game("map", [Computer()])
+        assert not transport.requests[0].create_game.player_setup[0].HasField("player_name")
+
+    def test_the_game_settings_reach_the_request(self) -> None:
+        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client.create_game("map", [Participant()], realtime=True, disable_fog=True, random_seed=7)
+        request = transport.requests[0].create_game
+        assert request.realtime and request.disable_fog
+        assert request.random_seed == 7
+
+    def test_no_seed_asked_for_leaves_the_game_to_pick_one(self) -> None:
+        """Zero is a seed like any other, so an unset field is the only way to say `any`."""
+        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client.create_game("map", [Participant()])
+        assert not transport.requests[0].create_game.HasField("random_seed")
+
+    def test_a_refused_creation_raises_even_without_a_top_level_error(self) -> None:
+        refusal = sc2api_pb2.ResponseCreateGame(
+            error=sc2api_pb2.ResponseCreateGame.InvalidMapPath, error_details="no such map"
+        )
+        client, _ = _client(_response(create_game=refusal))
+        with pytest.raises(ProtocolError, match="InvalidMapPath.*no such map"):
+            client.create_game("map", [Participant()])
+
+    def test_a_creation_the_game_did_not_answer_raises(self) -> None:
+        """An unset create_game field would otherwise read as a refusal-free success."""
+        client, _ = _client(_response(ping=sc2api_pb2.ResponsePing()))
+        with pytest.raises(ProtocolError, match="create_game"):
+            client.create_game("map", [Participant()])

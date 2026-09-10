@@ -103,6 +103,11 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **Set iteration order depends on how the set was built.** Two `frozenset`s holding equal elements iterate
   differently when one was reached by `difference`. That reached `random_point`, making a seeded game
   unreproducible. Anything that picks or orders elements must sort first.
+- **An unset proto2 enum field reads as its first declared value, not zero.** `Response.status` unset is
+  `launched`; `ResponseJoinGame.error` and `ResponseCreateGame.error` unset are `MissingParticipation` and
+  `MissingMap`, both truthy, so reading either blind refuses every successful request. Gate optional enum reads
+  with `HasField`, spelled out at the call site -- the stubs type it with a `Literal` of field names, so a helper
+  taking `field: str` defeats the check.
 - **`isinstance` against an ABC subclass costs ~6x a plain class when it misses** — ~125 ns against ~20. A
   dispatch chain over `Area` implementations pays that per branch it rejects. Prefer a virtual method; a type
   switch is both slower and closed to new shapes.
@@ -128,6 +133,18 @@ Curation decides which ids are real, so "does this still exist?" comes up consta
 dependencies, so the map decides the file: BerlingradAIE (2022) yields 4652 abilities against MagannathaAIE's
 4134, with 518 ids present only in the old map and a couple of dozen shared names shifted by +312 or +316.
 Refresh it from a current ladder map, never from whatever happened to be loaded last.
+
+## Talking to the game
+
+- **The authoritative protocol documentation is the comments in `sc2api.proto`**, and the `s2clientprotocol`
+  package on PyPI ships only generated code, which carries none of them. Read the source:
+  `https://raw.githubusercontent.com/Blizzard/s2client-proto/master/s2clientprotocol/sc2api.proto`
+- **A participant's race and name come from the join, not from the create.** `PlayerSetup.race` is used only for
+  a computer player, as its proto comment says: a game created with a bare `Participant` and joined as Terran
+  reports `race_actual` Terran, and `race_actual` is populated only for your own player.
+- **Map packs install alongside the maps they replace**, so one map name really does match several files --
+  `MagannathaAIE_v2.SC2Map` sits in both `Maps/` and `Maps/AIE/`. A lookup by name must resolve that rather than
+  refuse it.
 
 ## Testing
 

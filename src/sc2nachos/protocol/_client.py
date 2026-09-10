@@ -2,11 +2,12 @@
 
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
+from pathlib import Path
 
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos.match import Race, Result
+from sc2nachos.match import Computer, Participant, Player, Race, Result
 from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, ProtocolError
 from sc2nachos.protocol._ports import GamePorts
 from sc2nachos.protocol._status import Status
@@ -22,6 +23,20 @@ def _wrong_answer(field: str) -> ProtocolError:
     Each caller spells the field name out so that the protobuf stubs check it.
     """
     return ProtocolError(f"the game answered a {field} request without a {field} field")
+
+
+def _player_setup(player: Player) -> sc2api_pb2.PlayerSetup:
+    """One slot in a game being created. A participant carries nothing: it says who it is when it joins."""
+    match player:
+        case Participant():
+            return sc2api_pb2.PlayerSetup(type=sc2api_pb2.Participant)
+        case Computer(race=race, difficulty=difficulty, build=build, name=name):
+            setup = sc2api_pb2.PlayerSetup(
+                type=sc2api_pb2.Computer, race=race.value, difficulty=difficulty.value, ai_build=build.value
+            )
+            if name is not None:
+                setup.player_name = name
+            return setup
 
 
 class Client:
@@ -67,6 +82,39 @@ class Client:
         if not response.HasField("ping"):
             raise _wrong_answer("ping")
         return response.ping
+
+    def create_game(
+        self,
+        map_path: Path | str,
+        players: Sequence[Player],
+        *,
+        realtime: bool = False,
+        disable_fog: bool = False,
+        random_seed: int | None = None,
+    ) -> None:
+        """Set up a match on `map_path` for `players`, which each participant then joins.
+
+        Only the client that creates the game sends this; on a ladder the game already exists.
+        """
+        request = sc2api_pb2.RequestCreateGame(
+            local_map=sc2api_pb2.LocalMap(map_path=str(map_path)),
+            player_setup=[_player_setup(player) for player in players],
+            realtime=realtime,
+            disable_fog=disable_fog,
+        )
+        if random_seed is not None:
+            request.random_seed = random_seed
+
+        response = self._send(sc2api_pb2.Request(create_game=request))
+        if not response.HasField("create_game"):
+            raise _wrong_answer("create_game")
+        created = response.create_game
+        # An unset error field reads as the first refusal the proto declares, so ask before reading it.
+        if created.HasField("error"):
+            reason = sc2api_pb2.ResponseCreateGame.Error.Name(created.error)
+            detail = created.error_details or "no detail given"
+            raise ProtocolError(f"the game refused to create the match as {reason}: {detail}")
+        logger.info("Created a game on {} for {} players", map_path, len(players))
 
     def join_game(
         self,
