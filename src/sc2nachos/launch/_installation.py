@@ -138,4 +138,7 @@ class Installation:
         if not record.is_file():
             return None
         found = re.search(r" = (.*)Versions", record.read_text(encoding="utf-8", errors="replace"))
-        return found.group(1) if found else None
+        if found is None:
+            return None
+        # The capture ends at the separator before `Versions`, and only the host's own separator counts as one.
+        return found.group(1).rstrip("\\/")

@@ -47,18 +47,31 @@ class TestFinding:
         monkeypatch.setenv("SC2PATH", str(tmp_path))
         assert Installation.find(system="Windows").base == tmp_path
 
-    def test_the_launchers_own_record_is_read(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A non-default install shows up in ExecuteInfo.txt, which the launcher rewrites as it runs."""
+    @pytest.mark.parametrize(
+        ("system", "location", "separator"),
+        [
+            ("Windows", "Documents/StarCraft II/ExecuteInfo.txt", "\\"),
+            ("Darwin", "Library/Application Support/Blizzard/StarCraft II/ExecuteInfo.txt", "/"),
+        ],
+    )
+    def test_the_launchers_own_record_is_read(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, system: str, location: str, separator: str
+    ) -> None:
+        """A non-default install shows up in ExecuteInfo.txt, which the launcher rewrites as it runs.
+
+        Each platform writes its own separator, and the host running this need not share it.
+        """
         home, install = tmp_path / "home", tmp_path / "games" / "StarCraft II"
         install.mkdir(parents=True)
-        record = home / "Documents" / "StarCraft II" / "ExecuteInfo.txt"
+        record = home / location
         record.parent.mkdir(parents=True)
-        record.write_text(f"executable = {install}\\Versions\\Base95841\\SC2_x64.exe\n", encoding="utf-8")
+        executable = separator.join([str(install), "Versions", "Base95841", "SC2_x64.exe"])
+        record.write_text(f"executable = {executable}\n", encoding="utf-8")
 
         monkeypatch.delenv("SC2PATH", raising=False)
         monkeypatch.setenv("USERPROFILE", str(home))
         monkeypatch.setenv("HOME", str(home))
-        assert Installation.find(system="Windows").base == install
+        assert Installation.find(system=system).base == install
 
     def test_a_missing_installation_says_where_it_looked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("SC2PATH", raising=False)
