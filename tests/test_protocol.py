@@ -1,11 +1,12 @@
 """The protocol layer, driven entirely through the transport seam."""
 
+import lzma
 from collections import deque
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from s2clientprotocol import error_pb2, sc2api_pb2
+from s2clientprotocol import error_pb2, raw_pb2, sc2api_pb2
 from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketTimeoutException
 
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race, Result
@@ -17,6 +18,9 @@ from sc2nachos.protocol import (
     GamePorts,
     PortPair,
     ProtocolError,
+    Recording,
+    RecordingTransport,
+    ReplayTransport,
     Status,
     WebSocketTransport,
 )
@@ -356,3 +360,149 @@ class TestCreatingAGame:
         client, _ = _client(_response(ping=sc2api_pb2.ResponsePing()))
         with pytest.raises(ProtocolError, match="asked for create_game and answered ping"):
             client.create_game("map", [Participant()])
+
+
+class _BrokenTransport:
+    """A `Transport` that never gets an answer."""
+
+    def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
+        raise ConnectionClosedError("the connection to the game closed mid-request")
+
+    def close(self) -> None:
+        pass
+
+
+def _recorder(path: Path, *responses: sc2api_pb2.Response) -> RecordingTransport:
+    """A recorder into `path`, over a game that will answer `responses`."""
+    return RecordingTransport(FakeTransport(*responses), path)
+
+
+_VERSION = _response(ping=sc2api_pb2.ResponsePing(game_version="5.0.14." + "0" * 100))
+
+
+class TestRecording:
+    def test_a_whole_exchange_survives_the_round_trip(self, tmp_path: Path) -> None:
+        recorder = _recorder(tmp_path / "game.sc2rec", _VERSION)
+        Client(recorder).ping()
+        recorder.close()
+
+        (exchange,) = list(recorder.recording)
+        assert exchange.request.HasField("ping")
+        assert exchange.response.ping.game_version == _VERSION.ping.game_version
+
+    def test_a_recording_can_be_read_again(self, tmp_path: Path) -> None:
+        """Reading re-opens the file, so a corpus serves any number of tests."""
+        recorder = _recorder(tmp_path / "game.sc2rec", _VERSION)
+        Client(recorder).ping()
+        recorder.close()
+        assert list(recorder.recording) == list(recorder.recording)
+
+    def test_a_recording_is_far_smaller_than_the_game_it_holds(self, tmp_path: Path) -> None:
+        """Committing a corpus is only affordable because consecutive observations barely differ."""
+        path = tmp_path / "game.sc2rec"
+        crowd = [raw_pb2.Unit(tag=index, unit_type=48, health=45.0) for index in range(500)]
+        answers = [
+            _response(
+                observation=sc2api_pb2.ResponseObservation(
+                    observation=sc2api_pb2.Observation(game_loop=loop, raw_data=raw_pb2.ObservationRaw(units=crowd))
+                )
+            )
+            for loop in range(200)
+        ]
+        recorder = _recorder(path, *answers)
+        client = Client(recorder)
+        for _ in answers:
+            client.observation()
+        recorder.close()
+
+        raw = sum(len(answer.SerializeToString()) for answer in answers)
+        assert raw > 1_000_000
+        assert path.stat().st_size < raw // 20
+
+    def test_a_request_the_game_never_answered_is_not_recorded(self, tmp_path: Path) -> None:
+        recorder = RecordingTransport(_BrokenTransport(), tmp_path / "game.sc2rec")
+        with pytest.raises(ConnectionClosedError):
+            recorder.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+        recorder.close()
+        assert list(recorder.recording) == []
+
+    def test_closing_closes_the_transport_underneath_and_may_be_repeated(self, tmp_path: Path) -> None:
+        game = FakeTransport()
+        recorder = RecordingTransport(game, tmp_path / "game.sc2rec")
+        recorder.close()
+        recorder.close()
+        assert game.closed
+
+    def test_a_file_that_is_not_a_recording_says_so(self, tmp_path: Path) -> None:
+        path = tmp_path / "junk.sc2rec"
+        path.write_bytes(lzma.compress(b"whatever this file is, it is not one of ours"))
+        with pytest.raises(ProtocolError, match="not a recording"):
+            list(Recording(path))
+
+    def test_a_recording_cut_short_says_so(self, tmp_path: Path) -> None:
+        path = _truncated(tmp_path, cut=5)
+        with pytest.raises(ProtocolError, match="short of a Response"):
+            list(Recording(path))
+
+    def test_a_recording_ending_on_an_unanswered_request_says_so(self, tmp_path: Path) -> None:
+        path = _truncated(tmp_path, cut=len(_VERSION.SerializeToString()) + 4)
+        with pytest.raises(ProtocolError, match="never answered"):
+            list(Recording(path))
+
+
+def _truncated(tmp_path: Path, *, cut: int) -> Path:
+    """A recording of one exchange with its last `cut` bytes lost, as a run killed mid-write would leave it."""
+    path = tmp_path / "game.sc2rec"
+    recorder = _recorder(path, _VERSION)
+    Client(recorder).ping()
+    recorder.close()
+    path.write_bytes(lzma.compress(lzma.decompress(path.read_bytes())[:-cut]))
+    return path
+
+
+class TestReplay:
+    def _recorded(self, tmp_path: Path) -> Recording:
+        """A game created, joined and observed once, as a recording."""
+        recorder = _recorder(
+            tmp_path / "game.sc2rec",
+            _response(create_game=sc2api_pb2.ResponseCreateGame()),
+            _response(join_game=sc2api_pb2.ResponseJoinGame(player_id=2)),
+            _response(observation=sc2api_pb2.ResponseObservation(observation=sc2api_pb2.Observation(game_loop=48))),
+        )
+        client = Client(recorder)
+        client.create_game("map", [Participant(), Computer()])
+        client.join_game(Race.TERRAN)
+        client.observation()
+        client.close()
+        return recorder.recording
+
+    def test_a_recorded_conversation_drives_a_client_with_no_game(self, tmp_path: Path) -> None:
+        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        client.create_game("map", [Participant(), Computer()])
+        assert client.join_game(Race.TERRAN) == 2
+        assert client.observation().observation.game_loop == 48
+
+    def test_the_details_of_a_request_need_not_match(self, tmp_path: Path) -> None:
+        """Only the question is replayed, so a caller may ask about a loop the recording did not."""
+        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        client.create_game("other map", [Computer()])
+        assert client.join_game(Race.ZERG, name="someone else") == 2
+
+    def test_a_question_the_recording_was_not_asked_raises(self, tmp_path: Path) -> None:
+        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        with pytest.raises(ProtocolError, match="answers create_game next, and was asked for ping"):
+            client.ping()
+
+    def test_a_recording_that_has_run_out_says_so(self, tmp_path: Path) -> None:
+        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        client.create_game("map", [Participant(), Computer()])
+        client.join_game(Race.TERRAN)
+        client.observation()
+        with pytest.raises(ProtocolError, match="no answer left, and was asked for ping"):
+            client.ping()
+
+    def test_a_request_after_closing_raises(self, tmp_path: Path) -> None:
+        transport = ReplayTransport(self._recorded(tmp_path))
+        transport.close()
+        with pytest.raises(ConnectionClosedError):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
