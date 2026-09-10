@@ -132,12 +132,13 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 ## Testing
 
 `pytest`. Tests must not require StarCraft II to be installed or running, with the single exception of tests
-explicitly marked as integration tests. Everything else runs against recorded protobuf fixtures via the fixture
-transport.
+marked `@pytest.mark.integration`, which a plain `pytest` run deselects. Everything else runs against recorded
+protobuf fixtures via the fixture transport.
 
 | Task | Command |
 |---|---|
 | Run tests | `pytest` |
+| Run the tests that start a game | `pytest -m integration` |
 | Lint | `ruff check .` and `ruff format --check .` |
 | Type check | `pyright` (locally: `--pythonpath ../AvocaDOS/.venv/Scripts/python.exe`) |
 | Regenerate raw ids | `python tools/generate_ids.py` after refreshing `data/stableid.json` |

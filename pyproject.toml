@@ -48,6 +48,8 @@ packages = ["src/sc2nachos"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = ["integration: needs StarCraft II installed, and starts it"]
 filterwarnings = [
     "ignore::DeprecationWarning:google.protobuf.*",
     "ignore::DeprecationWarning:s2clientprotocol.*",
