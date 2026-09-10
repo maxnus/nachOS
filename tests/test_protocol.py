@@ -129,10 +129,15 @@ class TestErrors:
         for error in (GameEndedError, ConnectionClosedError, ConnectionTimeoutError):
             assert issubclass(error, ProtocolError)
 
-    def test_an_answer_to_a_different_question_raises(self) -> None:
+    def test_an_answer_to_a_different_question_names_both(self) -> None:
         client, _ = _client(_response(ping=sc2api_pb2.ResponsePing()))
-        with pytest.raises(ProtocolError, match="game_info"):
+        with pytest.raises(ProtocolError, match="asked for game_info and answered ping"):
             client.game_info()
+
+    def test_a_response_carrying_no_answer_at_all_says_so(self) -> None:
+        client, _ = _client(_response())
+        with pytest.raises(ProtocolError, match="asked for ping and answered nothing"):
+            client.ping()
 
 
 class TestJoining:
@@ -349,5 +354,5 @@ class TestCreatingAGame:
     def test_a_creation_the_game_did_not_answer_raises(self) -> None:
         """An unset create_game field would otherwise read as a refusal-free success."""
         client, _ = _client(_response(ping=sc2api_pb2.ResponsePing()))
-        with pytest.raises(ProtocolError, match="create_game"):
+        with pytest.raises(ProtocolError, match="asked for create_game and answered ping"):
             client.create_game("map", [Participant()])
