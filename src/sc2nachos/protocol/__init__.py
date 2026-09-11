@@ -5,6 +5,7 @@ from sc2nachos.protocol._errors import (
     ConnectionClosedError,
     ConnectionTimeoutError,
     GameEndedError,
+    GameNotStartedError,
     ProtocolError,
 )
 from sc2nachos.protocol._ports import GamePorts, PortPair
@@ -19,6 +20,7 @@ __all__ = [
     "ConnectionTimeoutError",
     "Exchange",
     "GameEndedError",
+    "GameNotStartedError",
     "GamePorts",
     "PortPair",
     "ProtocolError",

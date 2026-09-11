@@ -11,7 +11,17 @@ The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, wi
 
 ## Python
 
-Use the AvocaDOS virtual environment: `../AvocaDOS/.venv/Scripts/python.exe`. Never system Python.
+Use this repository's own environment, `.venv`, which `uv sync --extra dev` creates, and run every tool
+through `uv run`, as CI does. Never system Python, and never assume anything about what else is checked out
+next to this repository.
+
+**`Path.read_text` and `Path.write_text` default to the locale encoding here, which is cp1252.** Pass
+`encoding="utf-8"` to both, or an em dash written back to a source file silently becomes invalid UTF-8
+and ruff refuses to read it.
+
+**A `Final` dataclass field can only be set by the generated `__init__`.** It is an ordinary field at runtime,
+`slots=True` included, and pyright rejects any later assignment -- in `__post_init__` too. So a field that is
+fetched rather than passed in comes from a classmethod that calls the constructor, as `_Game.start` does.
 
 ## Core design rules
 
@@ -61,6 +71,10 @@ Carried over from AvocaDOS, so the two codebases read alike:
   `color`, `center`. The exception is generated identifiers: `ids/raw/` mirrors Blizzard's own names verbatim
   (`BuildinProgressNonCancellable`), and those are data, never to be "corrected".
 - Line length 120. `ruff check` and `ruff format --check` must pass.
+- **One game loop is a step.** Above the protocol layer time is counted in steps -- `Api.step`,
+  `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
+  layer keeps Blizzard's `game_loop`, because the messages it hands back carry that field, and `Api.play` is
+  the one place the two meet. Never write "frame" for either.
 
 ## Review checklist
 
@@ -111,6 +125,9 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **`isinstance` against an ABC subclass costs ~6x a plain class when it misses** — ~125 ns against ~20. A
   dispatch chain over `Area` implementations pays that per branch it rejects. Prefer a virtual method; a type
   switch is both slower and closed to new shapes.
+- **Reading a field out of a protobuf message costs over ten times a slot read** — `observation.observation.game_loop`
+  took ~180 ns against ~13 for the same int in a slotted dataclass (protobuf 7.36 on upb, Python 3.12). A value
+  read many times a turn is copied out once, when the observation arrives.
 
 ## Checking what the game contains
 
@@ -142,10 +159,40 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **A participant's race and name come from the join, not from the create.** `PlayerSetup.race` is used only for
   a computer player, as its proto comment says: a game created with a bare `Participant` and joined as Terran
   reports `race_actual` Terran, and `race_actual` is populated only for your own player.
+- **`ResponseGameInfo` never changes during a game.** Byte-identical at game loops 0, 256, 1024 and 3008 on
+  the same match. python-sc2 re-asks for it on every single step, which is 77 KB a step for a message that holds
+  the map, its terrain and who is playing. Ask once, at the start.
+- **`ResponseData` changes with upgrades, and only with them.** Byte-identical across 2000 steps without one.
+  After a debug `upgrade` left the player holding 55 upgrades, 131 of 2005 unit types had changed their
+  `weapons`, `armor` and `movement_speed` -- a Marine went from 6 damage and 0 armor to 7 and 1 -- while the
+  abilities, upgrades, buffs and effects had not. A unit type has one entry and no player, so once anyone has
+  upgraded the tables cannot be right for both sides. Asked at the start of a game, before any upgrade, they
+  are the base values both sides share. burnysc2 asks only then (`sc2/main.py:122`) and applies upgrades from
+  hand-written tables in `sc2/constants.py` (`DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, ...), using the
+  `attack_upgrade_level` and `armor_upgrade_level` on each unit. `raw.proto` lists those among the fields it
+  fills for every alliance, above its "Not populated for enemies" section.
+- **One connection can play game after game.** `sc2api.proto` describes `ended` as "ready for a new game", and
+  a client that left a game on Pylon went on to create and join one on Torches. Anything held because it does
+  not change during a game is held per game, never per connection.
+- **A game seats as many players as its map has slots, and drops the rest without a word.** On PylonAIE a
+  bot with two or with three computers was created and joined as a two-player game, `game_info` listing two
+  players, and nothing was refused. `PlayerSetup` has no team field, so teams cannot be set either. A bot alone
+  on a map plays; computers without a participant are refused ("There must be at least one participant or
+  observer").
 - **A recorded game is enormous raw and tiny compressed.** A full bare game is 771 exchanges and 63 MB, of
   which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
   default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one
   observation. xz is also the fastest to read back here, since most of the output is long match copies.
+- **A game against the computer says it is over on the observation that carries the results.** The step before
+  it still answers `in_game`. Once over, `step` and `action` are refused with `Game has already ended`, while
+  `observation` goes on answering with the results. Nothing in the protocol stops a step being the first to say
+  `ended`, so a runner has to follow any end with an observation before it can say who won.
+- **Leaving is refused whenever there is no game to leave**: before one is created, after a `create_game` the
+  game refused, between create and join, and after having already left. Each answers
+  `A game has not been started yet`, which a cleanup path has to forgive or it will hide the error that got it
+  there. Leaving from `in_game` is accepted and returns the client to `launched`.
+- **A game that is killed makes websocket-client raise a bare `ConnectionResetError`** (WinError 10054), not
+  one of its own `WebSocketException`s, so a transport has to translate the OS error too.
 - **Map packs install alongside the maps they replace**, so one map name really does match several files --
   `MagannathaAIE_v2.SC2Map` sits in both `Maps/` and `Maps/AIE/`. A lookup by name must resolve that rather than
   refuse it.
@@ -158,8 +205,9 @@ protobuf fixtures via the fixture transport.
 
 | Task | Command |
 |---|---|
-| Run tests | `pytest` |
-| Run the tests that start a game | `pytest -m integration` |
-| Lint | `ruff check .` and `ruff format --check .` |
-| Type check | `pyright` (locally: `--pythonpath ../AvocaDOS/.venv/Scripts/python.exe`) |
-| Regenerate raw ids | `python tools/generate_ids.py` after refreshing `data/stableid.json` |
+| Set up | `uv sync --extra dev` |
+| Run tests | `uv run pytest` |
+| Run the tests that start a game | `uv run pytest -m integration` |
+| Lint | `uv run ruff check .` and `uv run ruff format --check .` |
+| Type check | `uv run pyright` |
+| Regenerate raw ids | `uv run python tools/generate_ids.py` after refreshing `data/stableid.json` |

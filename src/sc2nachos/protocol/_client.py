@@ -9,13 +9,15 @@ from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos.match import Computer, Participant, Player, Race, Result
-from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, ProtocolError
+from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, GameNotStartedError, ProtocolError
 from sc2nachos.protocol._ports import GamePorts
 from sc2nachos.protocol._status import Status
 from sc2nachos.protocol._transport import Transport
 
-# What the game says when it is asked for something only a running game can give.
+# What the game says when it is asked for something only a running game can give, once the game is over.
 _GAME_OVER_ERRORS = frozenset({"Game has already ended", "Not supported if game has already ended"})
+# And what it says before one has started, which includes after the client has left the last one.
+_NOT_STARTED_ERRORS = frozenset({"A game has not been started yet"})
 
 
 # The answers this client knows how to read. Spelled out rather than taken as a `str` so that pyright checks
@@ -45,6 +47,9 @@ class Client:
     Every method is one request, and blocks until the game answers it. The protocol carries one request at
     a time with no way to match an answer to anything but the last question, so there is nothing to overlap.
 
+    One connection can play game after game. What the client keeps of a game, which is its own player and how
+    the game ended, lasts from the join until the game is left or the next one is set up.
+
     Nothing is interpreted here beyond what the protocol itself demands: the responses are the game's own
     messages, and turning them into a data model belongs above.
     """
@@ -72,6 +77,13 @@ class Client:
         return self._player_id
 
     @property
+    def result(self) -> Result | None:
+        """How the game ended for this client's own player, or `None` while it has not ended."""
+        if self._player_id is None:
+            return None
+        return self._results.get(self._player_id)
+
+    @property
     def results(self) -> Mapping[int, Result]:
         """How the game ended, by player id. Empty until it does."""
         return self._results
@@ -94,6 +106,7 @@ class Client:
 
         Only the client that creates the game sends this; on a ladder the game already exists.
         """
+        self._forget_game()
         request = sc2api_pb2.RequestCreateGame(
             local_map=sc2api_pb2.LocalMap(map_path=str(map_path)),
             player_setup=[_player_setup(player) for player in players],
@@ -124,6 +137,7 @@ class Client:
 
         NachOS plays on the raw interface, so the rendered ones are never requested.
         """
+        self._forget_game()
         request = sc2api_pb2.RequestJoinGame(
             race=race.value,
             options=sc2api_pb2.InterfaceOptions(
@@ -152,7 +166,6 @@ class Client:
             detail = joined.error_details or "no detail given"
             raise ProtocolError(f"the game refused the join as {reason}: {detail}")
         self._player_id = joined.player_id
-        self._results = {}
         logger.info("Joined the game as player {} playing {}", joined.player_id, race)
         return joined.player_id
 
@@ -170,7 +183,10 @@ class Client:
         buffs: bool = True,
         effects: bool = True,
     ) -> sc2api_pb2.ResponseData:
-        """The static tables behind the ids: costs, ranges, requirements and names."""
+        """The tables behind the ids: costs, ranges, requirements and names.
+
+        Unit weapons, armor and movement speed include the upgrades this player holds when it asks.
+        """
         request = sc2api_pb2.RequestData(
             ability_id=abilities,
             unit_type_id=unit_types,
@@ -198,7 +214,7 @@ class Client:
         return observation
 
     def step(self, count: int) -> sc2api_pb2.ResponseStep:
-        """Let the game run `count` frames. Only a stepped game needs this; a realtime one runs on its own."""
+        """Let the game run `count` game loops. Only a stepped game needs this; a realtime one runs on its own."""
         response = self._send(sc2api_pb2.Request(step=sc2api_pb2.RequestStep(count=count)), "step")
         return response.step
 
@@ -213,8 +229,13 @@ class Client:
         return response.save_replay.data
 
     def leave_game(self) -> None:
-        """Leave the game, which concedes it if it has not already ended."""
-        self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
+        """Leave the game, which concedes it if it has not already ended.
+
+        Leaving a game that never started, that is already over, or whose connection has gone does nothing.
+        """
+        with suppress(GameNotStartedError, GameEndedError, ConnectionClosedError):
+            self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
+        self._forget_game()
 
     def quit(self) -> None:
         """Ask the game client to exit. A connection that has already gone is not an error here."""
@@ -224,6 +245,11 @@ class Client:
     def close(self) -> None:
         """Release the transport."""
         self._transport.close()
+
+    def _forget_game(self) -> None:
+        """Drop what the client kept of the last game, so none of it answers for the next."""
+        self._player_id = None
+        self._results = {}
 
     def _observe(self, game_loop: int | None) -> sc2api_pb2.ResponseObservation:
         request = sc2api_pb2.RequestObservation()
@@ -245,6 +271,8 @@ class Client:
             errors = list(response.error)
             if _GAME_OVER_ERRORS.intersection(errors):
                 raise GameEndedError(f"the game is over: {'; '.join(errors)}")
+            if _NOT_STARTED_ERRORS.intersection(errors):
+                raise GameNotStartedError(f"no game has started: {'; '.join(errors)}")
             raise ProtocolError(f"the game refused the request: {'; '.join(errors)}")
         if answer is not None and not response.HasField(answer):
             asked = response.WhichOneof("response") or "nothing"

@@ -44,6 +44,9 @@ class WebSocketTransport:
             raise ConnectionTimeoutError("the game did not answer in time") from error
         except WebSocketException as error:
             raise ProtocolError(f"the websocket failed: {error}") from error
+        except ConnectionError as error:
+            # A game that dies resets the socket, which the websocket library lets through as a bare OSError.
+            raise ConnectionClosedError(f"the connection to the game was lost: {error}") from error
         if not isinstance(payload, bytes):
             raise ProtocolError(f"the game sent text where the protocol is binary: {payload!r}")
         response = sc2api_pb2.Response()

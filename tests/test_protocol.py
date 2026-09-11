@@ -1,13 +1,12 @@
 """The protocol layer, driven entirely through the transport seam."""
 
 import lzma
-from collections import deque
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import pytest
 from s2clientprotocol import error_pb2, raw_pb2, sc2api_pb2
-from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketTimeoutException
+from websocket import WebSocket, WebSocketTimeoutException
 
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
@@ -15,6 +14,7 @@ from sc2nachos.protocol import (
     ConnectionClosedError,
     ConnectionTimeoutError,
     GameEndedError,
+    GameNotStartedError,
     GamePorts,
     PortPair,
     ProtocolError,
@@ -24,83 +24,27 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
-
-
-class FakeTransport:
-    """A `Transport` that answers from a prepared queue and remembers what it was asked."""
-
-    def __init__(self, *responses: sc2api_pb2.Response) -> None:
-        self.requests: list[sc2api_pb2.Request] = []
-        self.closed = False
-        self._responses = deque(responses)
-
-    def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
-        self.requests.append(request)
-        if not self._responses:
-            raise AssertionError("the client asked more of the transport than the test prepared")
-        return self._responses.popleft()
-
-    def close(self) -> None:
-        self.closed = True
-
-
-class FakeWebSocket:
-    """The three methods `WebSocketTransport` uses, over a prepared queue of payloads."""
-
-    def __init__(self, *payloads: str | bytes, timeout: bool = False) -> None:
-        self.sent: list[bytes] = []
-        self.closed = False
-        self._payloads: deque[str | bytes] = deque(payloads)
-        self._timeout = timeout
-
-    def send_binary(self, payload: bytes) -> int:
-        if self.closed:
-            raise WebSocketConnectionClosedException("socket is already closed.")
-        self.sent.append(payload)
-        return len(payload)
-
-    def recv(self) -> str | bytes:
-        if self._timeout:
-            raise WebSocketTimeoutException("timed out")
-        if not self._payloads:
-            raise WebSocketConnectionClosedException("Connection to remote host was lost.")
-        return self._payloads.popleft()
-
-    def close(self) -> None:
-        self.closed = True
-
-
-def _response(status: Status | None = Status.IN_GAME, **fields: Any) -> sc2api_pb2.Response:
-    """A response carrying `fields`, and `status` unless it is given as `None`."""
-    response = sc2api_pb2.Response(**fields)
-    if status is not None:
-        response.status = status.value
-    return response
-
-
-def _observation(*results: tuple[int, Result]) -> sc2api_pb2.ResponseObservation:
-    return sc2api_pb2.ResponseObservation(
-        player_result=[sc2api_pb2.PlayerResult(player_id=player, result=result.value) for player, result in results]
-    )
-
-
-def _client(*responses: sc2api_pb2.Response) -> tuple[Client, FakeTransport]:
-    transport = FakeTransport(*responses)
-    return Client(transport), transport
+from support import (
+    FakeTransport,
+    FakeWebSocket,
+    make_client,
+    make_observation,
+    make_response,
+)
 
 
 class TestStatus:
     def test_the_client_reports_what_the_game_last_said(self) -> None:
-        client, _ = _client(_response(Status.INIT_GAME, ping=sc2api_pb2.ResponsePing()))
+        client, _ = make_client(make_response(Status.INIT_GAME, ping=sc2api_pb2.ResponsePing()))
         assert client.status is None
         client.ping()
         assert client.status is Status.INIT_GAME
 
     def test_a_response_without_a_status_leaves_the_last_one_standing(self) -> None:
         """An unset status field reads as `launched`, so reading it blind would walk the status backwards."""
-        client, _ = _client(
-            _response(Status.IN_GAME, ping=sc2api_pb2.ResponsePing()),
-            _response(None, ping=sc2api_pb2.ResponsePing()),
+        client, _ = make_client(
+            make_response(Status.IN_GAME, ping=sc2api_pb2.ResponsePing()),
+            make_response(None, ping=sc2api_pb2.ResponsePing()),
         )
         client.ping()
         client.ping()
@@ -113,40 +57,45 @@ class TestStatus:
             (Status.INIT_GAME, False),
             (Status.ENDED, False),
         ]:
-            client, _ = _client(_response(status, ping=sc2api_pb2.ResponsePing()))
+            client, _ = make_client(make_response(status, ping=sc2api_pb2.ResponsePing()))
             client.ping()
             assert client.in_game is expected, status
 
 
 class TestErrors:
     def test_a_refused_request_raises(self) -> None:
-        client, _ = _client(_response(error=["Doh!"], ping=sc2api_pb2.ResponsePing()))
+        client, _ = make_client(make_response(error=["Doh!"], ping=sc2api_pb2.ResponsePing()))
         with pytest.raises(ProtocolError, match="Doh!"):
             client.ping()
 
     def test_a_finished_game_raises_its_own_error(self) -> None:
-        client, _ = _client(_response(Status.ENDED, error=["Game has already ended"]))
+        client, _ = make_client(make_response(Status.ENDED, error=["Game has already ended"]))
         with pytest.raises(GameEndedError):
             client.ping()
 
+    def test_a_game_that_has_not_started_raises_its_own_error(self) -> None:
+        client, _ = make_client(make_response(Status.LAUNCHED, error=["A game has not been started yet"]))
+        with pytest.raises(GameNotStartedError):
+            client.observation()
+
     def test_every_failure_is_a_protocol_error(self) -> None:
-        for error in (GameEndedError, ConnectionClosedError, ConnectionTimeoutError):
+        for error in (GameEndedError, GameNotStartedError, ConnectionClosedError, ConnectionTimeoutError):
             assert issubclass(error, ProtocolError)
 
     def test_an_answer_to_a_different_question_names_both(self) -> None:
-        client, _ = _client(_response(ping=sc2api_pb2.ResponsePing()))
+        client, _ = make_client(make_response(ping=sc2api_pb2.ResponsePing()))
         with pytest.raises(ProtocolError, match="asked for game_info and answered ping"):
             client.game_info()
 
     def test_a_response_carrying_no_answer_at_all_says_so(self) -> None:
-        client, _ = _client(_response())
+        client, _ = make_client(make_response())
         with pytest.raises(ProtocolError, match="asked for ping and answered nothing"):
             client.ping()
 
 
 class TestJoining:
     def test_the_join_asks_for_the_raw_interface_only(self) -> None:
-        client, transport = _client(_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=2)))
+        client, transport = make_client(make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=2)))
         assert client.join_game(Race.TERRAN) == 2
         assert client.player_id == 2
         options = transport.requests[0].join_game.options
@@ -154,7 +103,7 @@ class TestJoining:
         assert not options.HasField("render") and not options.HasField("feature_layer")
 
     def test_a_name_and_ports_reach_the_request(self) -> None:
-        client, transport = _client(_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)))
+        client, transport = make_client(make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)))
         client.join_game(Race.ZERG, name="AvocaDOS", ports=GamePorts.from_start_port(1000))
         request = transport.requests[0].join_game
         assert request.race == Race.ZERG.value
@@ -166,16 +115,50 @@ class TestJoining:
         refusal = sc2api_pb2.ResponseJoinGame(
             error=sc2api_pb2.ResponseJoinGame.MissingParticipation, error_details="no slot"
         )
-        client, _ = _client(_response(join_game=refusal))
+        client, _ = make_client(make_response(join_game=refusal))
         with pytest.raises(ProtocolError, match="MissingParticipation.*no slot"):
             client.join_game(Race.PROTOSS)
 
 
+class TestGameAfterGame:
+    """One connection can play game after game, so nothing of one game may answer for the next."""
+
+    def _won(self, *after: sc2api_pb2.Response) -> Client:
+        """A client whose game has ended in a victory, over a transport that will then answer `after`."""
+        client, _ = make_client(
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+            make_response(Status.ENDED, observation=make_observation(100, (1, Result.VICTORY))),
+            *after,
+        )
+        client.join_game(Race.TERRAN)
+        client.observation()
+        assert client.result is Result.VICTORY
+        return client
+
+    def test_leaving_forgets_the_game(self) -> None:
+        client = self._won(make_response(Status.LAUNCHED))
+        client.leave_game()
+        assert (client.player_id, client.result, dict(client.results)) == (None, None, {})
+
+    def test_creating_the_next_game_forgets_the_last(self) -> None:
+        """A game that has ended is ready for a new one without being left first."""
+        client = self._won(make_response(Status.INIT_GAME, create_game=sc2api_pb2.ResponseCreateGame()))
+        client.create_game("Next.SC2Map", [Participant(), Participant()])
+        assert (client.player_id, client.result) == (None, None)
+
+    def test_a_refused_join_leaves_nothing_of_the_last_game(self) -> None:
+        refused = sc2api_pb2.ResponseJoinGame(error=sc2api_pb2.ResponseJoinGame.MissingParticipation)
+        client = self._won(make_response(Status.ENDED, join_game=refused))
+        with pytest.raises(ProtocolError, match="MissingParticipation"):
+            client.join_game(Race.TERRAN)
+        assert (client.player_id, client.result) == (None, None)
+
+
 class TestObservation:
     def test_a_running_game_answers_in_one_request(self) -> None:
-        client, transport = _client(
-            _response(ping=sc2api_pb2.ResponsePing()),
-            _response(observation=sc2api_pb2.ResponseObservation()),
+        client, transport = make_client(
+            make_response(ping=sc2api_pb2.ResponsePing()),
+            make_response(observation=sc2api_pb2.ResponseObservation()),
         )
         client.ping()
         client.observation()
@@ -183,30 +166,30 @@ class TestObservation:
         assert client.results == {}
 
     def test_a_requested_game_loop_reaches_the_request(self) -> None:
-        client, transport = _client(_response(observation=sc2api_pb2.ResponseObservation()))
+        client, transport = make_client(make_response(observation=sc2api_pb2.ResponseObservation()))
         client.observation(game_loop=448)
         assert transport.requests[0].observation.game_loop == 448
 
     def test_the_results_land_when_the_game_ends(self) -> None:
-        ended = _observation((1, Result.VICTORY), (2, Result.DEFEAT))
-        client, _ = _client(_response(Status.ENDED, observation=ended))
+        ended = make_observation(0, (1, Result.VICTORY), (2, Result.DEFEAT))
+        client, _ = make_client(make_response(Status.ENDED, observation=ended))
         client.observation()
         assert client.results == {1: Result.VICTORY, 2: Result.DEFEAT}
 
     def test_a_game_that_ends_a_step_early_costs_one_more_request(self) -> None:
         """The game reports itself ended a step before it will say who won."""
-        client, transport = _client(
-            _response(Status.ENDED, observation=sc2api_pb2.ResponseObservation()),
-            _response(Status.ENDED, observation=_observation((1, Result.DEFEAT))),
+        client, transport = make_client(
+            make_response(Status.ENDED, observation=sc2api_pb2.ResponseObservation()),
+            make_response(Status.ENDED, observation=make_observation(0, (1, Result.DEFEAT))),
         )
         client.observation()
         assert len(transport.requests) == 2
         assert client.results == {1: Result.DEFEAT}
 
     def test_joining_clears_the_results_of_the_last_game(self) -> None:
-        client, _ = _client(
-            _response(Status.ENDED, observation=_observation((1, Result.VICTORY))),
-            _response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+        client, _ = make_client(
+            make_response(Status.ENDED, observation=make_observation(0, (1, Result.VICTORY))),
+            make_response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
         )
         client.observation()
         client.join_game(Race.TERRAN)
@@ -215,18 +198,18 @@ class TestObservation:
 
 class TestRequests:
     def test_step_asks_for_a_count_of_frames(self) -> None:
-        client, transport = _client(_response(step=sc2api_pb2.ResponseStep(simulation_loop=112)))
+        client, transport = make_client(make_response(step=sc2api_pb2.ResponseStep(simulation_loop=112)))
         assert client.step(4).simulation_loop == 112
         assert transport.requests[0].step.count == 4
 
     def test_act_returns_a_verdict_per_action(self) -> None:
         actions = [sc2api_pb2.Action(), sc2api_pb2.Action()]
-        client, transport = _client(_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.Success] * 2)))
+        client, transport = make_client(make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.Success] * 2)))
         assert len(client.act(actions).result) == 2
         assert len(transport.requests[0].action.actions) == 2
 
     def test_game_data_asks_for_every_table_by_default(self) -> None:
-        client, transport = _client(_response(data=sc2api_pb2.ResponseData()))
+        client, transport = make_client(make_response(data=sc2api_pb2.ResponseData()))
         client.game_data()
         request = transport.requests[0].data
         assert (request.ability_id, request.unit_type_id, request.upgrade_id, request.buff_id, request.effect_id) == (
@@ -238,7 +221,7 @@ class TestRequests:
         )
 
     def test_a_replay_comes_back_as_bytes(self) -> None:
-        client, _ = _client(_response(save_replay=sc2api_pb2.ResponseSaveReplay(data=b"replay")))
+        client, _ = make_client(make_response(save_replay=sc2api_pb2.ResponseSaveReplay(data=b"replay")))
         assert client.save_replay() == b"replay"
 
     def test_quit_forgives_a_connection_that_has_already_gone(self) -> None:
@@ -250,8 +233,21 @@ class TestRequests:
 
         Client(ClosedTransport()).quit()
 
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            make_response(Status.LAUNCHED, error=["A game has not been started yet"]),
+            make_response(Status.ENDED, error=["Game has already ended"]),
+        ],
+        ids=["never started", "already over"],
+    )
+    def test_leaving_a_game_that_is_not_being_played_does_nothing(self, answer: sc2api_pb2.Response) -> None:
+        client, transport = make_client(answer)
+        client.leave_game()
+        assert transport.requests[0].HasField("leave_game")
+
     def test_closing_the_client_releases_the_transport(self) -> None:
-        client, transport = _client()
+        client, transport = make_client()
         client.close()
         assert transport.closed
 
@@ -261,7 +257,7 @@ class TestWebSocketTransport:
         return WebSocketTransport(cast(WebSocket, websocket))
 
     def test_a_request_goes_out_serialized_and_the_answer_comes_back_parsed(self) -> None:
-        answer = _response(ping=sc2api_pb2.ResponsePing(base_build=93333))
+        answer = make_response(ping=sc2api_pb2.ResponsePing(base_build=93333))
         websocket = FakeWebSocket(answer.SerializeToString())
         response = self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
         assert response.ping.base_build == 93333
@@ -279,8 +275,13 @@ class TestWebSocketTransport:
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
     def test_a_game_that_never_answers_raises_a_timeout(self) -> None:
-        websocket = FakeWebSocket(timeout=True)
+        websocket = FakeWebSocket(failure=WebSocketTimeoutException("timed out"))
         with pytest.raises(ConnectionTimeoutError):
+            self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+
+    def test_a_game_that_died_is_a_closed_connection(self) -> None:
+        websocket = FakeWebSocket(failure=ConnectionResetError(10054, "An existing connection was forcibly closed"))
+        with pytest.raises(ConnectionClosedError, match="forcibly closed"):
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
     def test_a_text_frame_is_not_a_response(self) -> None:
@@ -304,7 +305,7 @@ class TestGamePorts:
 
 class TestCreatingAGame:
     def test_the_map_and_the_players_reach_the_request(self) -> None:
-        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game(Path("/sc2/Maps/PylonAIE.SC2Map"), [Participant(), Computer()])
         request = transport.requests[0].create_game
         assert request.local_map.map_path.endswith("PylonAIE.SC2Map")
@@ -312,13 +313,13 @@ class TestCreatingAGame:
 
     def test_a_participant_says_nothing_about_itself(self) -> None:
         """The race and the name are settled at the join, and the game ignores them here."""
-        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game("map", [Participant()])
         setup = transport.requests[0].create_game.player_setup[0]
         assert not setup.HasField("race") and not setup.HasField("player_name")
 
     def test_a_computer_carries_how_it_plays(self) -> None:
-        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         opponent = Computer(race=Race.ZERG, difficulty=Difficulty.HARD, build=AIBuild.RUSH, name="Roachy")
         client.create_game("map", [Participant(), opponent])
         setup = transport.requests[0].create_game.player_setup[1]
@@ -330,12 +331,12 @@ class TestCreatingAGame:
         assert setup.player_name == "Roachy"
 
     def test_an_unnamed_computer_keeps_the_name_the_game_gives_it(self) -> None:
-        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game("map", [Computer()])
         assert not transport.requests[0].create_game.player_setup[0].HasField("player_name")
 
     def test_the_game_settings_reach_the_request(self) -> None:
-        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game("map", [Participant()], realtime=True, disable_fog=True, random_seed=7)
         request = transport.requests[0].create_game
         assert request.realtime and request.disable_fog
@@ -343,7 +344,7 @@ class TestCreatingAGame:
 
     def test_no_seed_asked_for_leaves_the_game_to_pick_one(self) -> None:
         """Zero is a seed like any other, so an unset field is the only way to say `any`."""
-        client, transport = _client(_response(create_game=sc2api_pb2.ResponseCreateGame()))
+        client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game("map", [Participant()])
         assert not transport.requests[0].create_game.HasField("random_seed")
 
@@ -351,13 +352,13 @@ class TestCreatingAGame:
         refusal = sc2api_pb2.ResponseCreateGame(
             error=sc2api_pb2.ResponseCreateGame.InvalidMapPath, error_details="no such map"
         )
-        client, _ = _client(_response(create_game=refusal))
+        client, _ = make_client(make_response(create_game=refusal))
         with pytest.raises(ProtocolError, match="InvalidMapPath.*no such map"):
             client.create_game("map", [Participant()])
 
     def test_a_creation_the_game_did_not_answer_raises(self) -> None:
         """An unset create_game field would otherwise read as a refusal-free success."""
-        client, _ = _client(_response(ping=sc2api_pb2.ResponsePing()))
+        client, _ = make_client(make_response(ping=sc2api_pb2.ResponsePing()))
         with pytest.raises(ProtocolError, match="asked for create_game and answered ping"):
             client.create_game("map", [Participant()])
 
@@ -377,7 +378,7 @@ def _recorder(path: Path, *responses: sc2api_pb2.Response) -> RecordingTransport
     return RecordingTransport(FakeTransport(*responses), path)
 
 
-_VERSION = _response(ping=sc2api_pb2.ResponsePing(game_version="5.0.14." + "0" * 100))
+_VERSION = make_response(ping=sc2api_pb2.ResponsePing(game_version="5.0.14." + "0" * 100))
 
 
 class TestRecording:
@@ -402,7 +403,7 @@ class TestRecording:
         path = tmp_path / "game.sc2rec"
         crowd = [raw_pb2.Unit(tag=index, unit_type=48, health=45.0) for index in range(500)]
         answers = [
-            _response(
+            make_response(
                 observation=sc2api_pb2.ResponseObservation(
                     observation=sc2api_pb2.Observation(game_loop=loop, raw_data=raw_pb2.ObservationRaw(units=crowd))
                 )
@@ -465,9 +466,9 @@ class TestReplay:
         """A game created, joined and observed once, as a recording."""
         recorder = _recorder(
             tmp_path / "game.sc2rec",
-            _response(create_game=sc2api_pb2.ResponseCreateGame()),
-            _response(join_game=sc2api_pb2.ResponseJoinGame(player_id=2)),
-            _response(observation=sc2api_pb2.ResponseObservation(observation=sc2api_pb2.Observation(game_loop=48))),
+            make_response(create_game=sc2api_pb2.ResponseCreateGame()),
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=2)),
+            make_response(observation=sc2api_pb2.ResponseObservation(observation=sc2api_pb2.Observation(game_loop=48))),
         )
         client = Client(recorder)
         client.create_game("map", [Participant(), Computer()])
