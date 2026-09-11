@@ -3,7 +3,7 @@
 import numpy
 import pytest
 
-from sc2nachos.geometry import Circle, Grid, Point, Rectangle, Tile, TileSet
+from sc2nachos.geometry import Circle, Grid, MutableGrid, Point, Rectangle, Tile, TileSet
 
 
 def playable_grid() -> Grid[float]:
@@ -82,7 +82,7 @@ class TestOutside:
         assert grid[Point((100.5, 100.5))] is False
 
     def test_writing_off_the_grid_always_raises(self) -> None:
-        grid = Grid(numpy.ones((4, 4)), origin=Tile(10, 10), outside=0.0)
+        grid = MutableGrid(numpy.ones((4, 4)), origin=Tile(10, 10), outside=0.0)
         with pytest.raises(IndexError, match="lies outside"):
             grid[Point((100.5, 100.5))] = 5.0
 
@@ -92,7 +92,7 @@ class TestOutside:
             grid.index_of(Point((100.5, 100.5)))
 
     def test_with_outside_shares_the_data(self) -> None:
-        grid = Grid(numpy.ones((4, 4)), origin=Tile(10, 10))
+        grid = MutableGrid(numpy.ones((4, 4)), origin=Tile(10, 10))
         lenient = grid.with_outside(0.0)
         assert lenient[Point((100.5, 100.5))] == 0.0
         assert grid.outside is None
@@ -462,6 +462,30 @@ class TestSummaries:
             Grid.zeros(3, 3).where(numpy.ones((3, 3), dtype=bool), 0.0)  # pyright: ignore[reportArgumentType]
 
 
+class TestWhichGridsCanBeWritten:
+    def test_a_grid_cannot_be_written_to(self) -> None:
+        """Pyright refuses this, which is the point of the two types; the runtime refuses it too."""
+        grid = Grid(numpy.ones((4, 4)))
+        with pytest.raises(TypeError, match="does not support item assignment"):
+            grid[Tile(0, 0)] = 1.0  # pyright: ignore[reportIndexIssue]
+
+    def test_every_grid_derived_from_one_can_be(self) -> None:
+        grid = Grid(numpy.ones((4, 4)))
+        derived = (grid.copy(), grid + 1, grid.cropped(Rectangle(0, 0, 2, 2)), Grid.like(grid), Grid.zeros(2, 2))
+        assert all(isinstance(one, MutableGrid) for one in derived)
+
+    def test_a_grid_that_only_reads_a_different_value_outside_is_still_one(self) -> None:
+        """It shares the values it was built on, so it cannot come back writable."""
+        assert not isinstance(Grid(numpy.ones((4, 4))).with_outside(0.0), MutableGrid)
+        assert isinstance(MutableGrid(numpy.ones((4, 4))).with_outside(0.0), MutableGrid)
+
+    def test_values_that_refuse_writes_make_only_a_grid(self) -> None:
+        values = numpy.ones((4, 4))
+        values.flags.writeable = False
+        with pytest.raises(ValueError, match="refuse writes"):
+            MutableGrid(values)
+
+
 class TestMutation:
     def test_copy_is_independent(self) -> None:
         grid = playable_grid()
@@ -476,7 +500,7 @@ class TestMutation:
 
     def test_a_mask_writes_only_the_tiles_it_selects(self) -> None:
         """`grid[grid > 4] = 4.0` clamps; `where` can only say it by inverting the predicate."""
-        grid = Grid(numpy.arange(9.0).reshape(3, 3))
+        grid = MutableGrid(numpy.arange(9.0).reshape(3, 3))
         grid[grid > 4] = 4.0
         assert grid.max() == 4.0
         assert grid.values.tolist() == [[0.0, 1.0, 2.0], [3.0, 4.0, 4.0], [4.0, 4.0, 4.0]]

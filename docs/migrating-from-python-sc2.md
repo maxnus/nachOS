@@ -62,7 +62,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 |---|---|
 | `Point2`, `Point3` | `Point`, `Point3D` |
 | `Rect` | `Rectangle`, which is neither a point nor a tuple |
-| `PixelMap` | `Grid` |
+| `PixelMap` | `Grid` to read, `MutableGrid` to write |
 | `p.to2`, `p.to3` | `p.ground`, `p.with_height(z)` |
 | `p.offset(q)` | `p + q` |
 | `p.rotate(angle)` | `p.rotated(angle)`, optionally `around=` another point |
@@ -97,7 +97,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
 - **The grids refuse writes.** python-sc2 rebuilds the pathing grid every step, so writing into it lasted one
-  step. `copy()` a NachOS grid to change it.
+  step. What the map hands out is a `Grid`, which has no `__setitem__` at all; `copy()` gives a `MutableGrid` of
+  your own, as does anything else derived from a grid.
 - **Height is the ground's height, not a byte, and python-sc2 decodes the byte a little low.** Its
   `terrain_height` holds the byte the game sends. Its `get_terrain_z_height` computes `-16 + 32 * byte / 255`,
   which reads up to 0.03 below where units stand. A byte is an eighth of a unit of height, with 127 at zero.

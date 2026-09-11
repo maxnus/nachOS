@@ -7,7 +7,7 @@ import pytest
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Point, Rectangle, Tile
+from sc2nachos.geometry import MutableGrid, Point, Rectangle, Tile
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.protocol import ProtocolError, Recording
 from support import make_bytes, make_game_info
@@ -86,8 +86,10 @@ class TestReadingAMap:
 
     def test_the_grids_refuse_writes_but_a_copy_does_not(self) -> None:
         game_map = GameMap(make_game_info())
-        with pytest.raises(ValueError, match="read-only"):
-            game_map.pathing[Tile(0, 0)] = False
+        # The type says as much, and so do the values, which no MutableGrid may be built over.
+        assert not isinstance(game_map.pathing, MutableGrid)
+        with pytest.raises(ValueError, match="refuse writes"):
+            MutableGrid(game_map.pathing.values)
         copy = game_map.pathing.copy()
         copy[Tile(0, 0)] = False
         assert game_map.pathing[Tile(0, 0)]
