@@ -170,7 +170,11 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
   are the base values both sides share. burnysc2 asks only then (`sc2/main.py:122`) and applies upgrades from
   hand-written tables in `sc2/constants.py` (`DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, ...), using the
   `attack_upgrade_level` and `armor_upgrade_level` on each unit. `raw.proto` lists those among the fields it
-  fills for every alliance, above its "Not populated for enemies" section.
+  fills for every alliance, above its "Not populated for enemies" section, and the corpus bears it out: every
+  visible enemy unit carries `armor_upgrade_level` and `shield_upgrade_level`, every armed one
+  `attack_upgrade_level` (widow mines, infestors and overseers have none), and the levels rise on zerglings,
+  stalkers, marines and hellbats some nine minutes in. The one cloaked unit seen undetected, an observer, carried
+  none of the three.
 - **One connection can play game after game.** `sc2api.proto` describes `ended` as "ready for a new game", and
   a client that left a game on Pylon went on to create and join one on Torches. Anything held because it does
   not change during a game is held per game, never per connection.
@@ -203,6 +207,12 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 marked `@pytest.mark.integration`, which a plain `pytest` run deselects. Everything else runs against recorded
 protobuf fixtures via the fixture transport.
 
+**The corpus** in `tests/corpus` is five whole games, a bare api losing to the computer on current ladder maps,
+recorded by `tools/record_corpus.py`, which says what each one is. Replaying one asks the same questions in the
+same order, so a change to what the library asks a game fails `test_corpus.py` until the corpus is recorded
+again. The bare api gives no orders, so the only orders in it are those the game gives on its own, nearly all of
+them workers mining, and since nothing leaves its base it shows the computer's army but none of its buildings.
+
 | Task | Command |
 |---|---|
 | Set up | `uv sync --extra dev` |
@@ -211,3 +221,4 @@ protobuf fixtures via the fixture transport.
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
 | Type check | `uv run pyright` |
 | Regenerate raw ids | `uv run python tools/generate_ids.py` after refreshing `data/stableid.json` |
+| Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
