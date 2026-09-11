@@ -22,15 +22,14 @@ class _Game:
     info: sc2api_pb2.ResponseGameInfo
     data: sc2api_pb2.ResponseData
     observation: sc2api_pb2.ResponseObservation | None = None
-    turn: int = 0
-    game_loop: int = 0
+    step: int = 0
     result: Result | None = None
 
     def finish(self, result: Result) -> Result:
         """Settle how the game ended, and say so."""
         self.result = result
-        seconds = steps_to_seconds(self.game_loop)
-        logger.info("The game ended in a {} on turn {} at {:.0f} seconds", result, self.turn, seconds)
+        seconds = steps_to_seconds(self.step)
+        logger.info("The game ended in a {} at step {}, {:.0f} seconds in", result, self.step, seconds)
         return result
 
 
@@ -40,18 +39,21 @@ class Api:
     Construct one where the rest of your bot can reach it, which may be module scope, and hand it to `run_local`
     or `run_ladder` for every game it plays. Never subclass it: helpers of your own belong in your own modules, as
     ordinary functions.
+
+    Time is counted in steps. One step is one game loop, 22.4 of them make a second, and the bot takes a turn
+    every `steps_per_turn` of them.
     """
 
-    def __init__(self, *, step_size: int = 1) -> None:
-        """Take a turn every `step_size` game frames. Nothing here connects to anything."""
-        self._step_size = step_size
+    def __init__(self, *, steps_per_turn: int = 1) -> None:
+        """Take a turn every `steps_per_turn` steps. Nothing here connects to anything."""
+        self._steps_per_turn = steps_per_turn
         # Everything that belongs to one game and nothing that outlives it, so each game replaces it whole.
         self._game: _Game | None = None
 
     @property
-    def step_size(self) -> int:
-        """How many game frames pass between turns."""
-        return self._step_size
+    def steps_per_turn(self) -> int:
+        """How many steps pass between one turn and the next."""
+        return self._steps_per_turn
 
     @property
     def client(self) -> Client:
@@ -61,19 +63,14 @@ class Api:
         return self._game.client
 
     @property
-    def turn(self) -> int:
-        """How many turns the game has had, which is zero before the first one."""
-        return self._game.turn if self._game is not None else 0
-
-    @property
-    def game_loop(self) -> int:
-        """The frame the game had reached when it was last observed."""
-        return self._game.game_loop if self._game is not None else 0
+    def step(self) -> int:
+        """The step the game had reached when it was last observed, which is zero before it has been."""
+        return self._game.step if self._game is not None else 0
 
     @property
     def time(self) -> float:
         """How long the game has been played, in seconds."""
-        return steps_to_seconds(self.game_loop)
+        return steps_to_seconds(self.step)
 
     @property
     def result(self) -> Result | None:
@@ -91,13 +88,15 @@ class Api:
         # The map and the static tables never change during a game, so they are asked for once.
         game = _Game(client, client.game_info(), client.game_data())
         self._game = game
-        logger.info("Playing {} at {} frames a turn", game.info.map_name, self._step_size)
+        logger.info("Playing {} at {} steps a turn", game.info.map_name, self._steps_per_turn)
 
         while True:
-            # A realtime game runs whether or not anyone is watching, so a turn asks for the frame it wants.
-            target = game.game_loop + self._step_size if realtime and game.turn else None
+            # A realtime game runs whether or not anyone is watching, so each turn after the first asks for the
+            # step it wants.
+            target = game.step + self._steps_per_turn if realtime and game.observation is not None else None
             game.observation = client.observation(game_loop=target)
-            game.game_loop = game.observation.observation.game_loop
+            # The protocol's game loop is what NachOS calls a step, and this is the one place the two meet.
+            game.step = game.observation.observation.game_loop
 
             if (result := client.result) is not None:
                 return game.finish(result)
@@ -108,8 +107,7 @@ class Api:
                 logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
                 return game.finish(Result.TIE)
 
-            game.turn += 1
             # A turn's work belongs here, once there is any: the event dispatch and the flush of orders.
 
             if not realtime:
-                client.step(self._step_size)
+                client.step(self._steps_per_turn)

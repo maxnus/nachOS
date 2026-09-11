@@ -65,6 +65,10 @@ Carried over from AvocaDOS, so the two codebases read alike:
   `color`, `center`. The exception is generated identifiers: `ids/raw/` mirrors Blizzard's own names verbatim
   (`BuildinProgressNonCancellable`), and those are data, never to be "corrected".
 - Line length 120. `ruff check` and `ruff format --check` must pass.
+- **One game loop is a step.** Above the protocol layer time is counted in steps -- `Api.step`,
+  `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
+  layer keeps Blizzard's `game_loop`, because the messages it hands back carry that field, and `Api.play` is
+  the one place the two meet. Never write "frame" for either.
 
 ## Review checklist
 

@@ -207,7 +207,7 @@ class Client:
         return observation
 
     def step(self, count: int) -> sc2api_pb2.ResponseStep:
-        """Let the game run `count` frames. Only a stepped game needs this; a realtime one runs on its own."""
+        """Let the game run `count` game loops. Only a stepped game needs this; a realtime one runs on its own."""
         response = self._send(sc2api_pb2.Request(step=sc2api_pb2.RequestStep(count=count)), "step")
         return response.step
 
