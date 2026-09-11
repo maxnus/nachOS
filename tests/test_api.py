@@ -18,7 +18,7 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
-from support import FakeTransport, make_observation, make_response
+from support import FakeTransport, make_game_info, make_observation, make_response
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
 _LADDER_MAP = "PylonAIE"
@@ -30,7 +30,7 @@ def _game(*steps: int, ending: Result | None = Result.VICTORY, stepped: bool = T
     Without an `ending` the game never says it is over, which is what a time limit is for.
     """
     responses = [
-        make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Somewhere")),
+        make_response(game_info=make_game_info()),
         make_response(data=sc2api_pb2.ResponseData()),
     ]
     for index, step in enumerate(steps):
@@ -100,7 +100,7 @@ def _somewhere() -> Map:
 
 
 class TestBeforeAGame:
-    @pytest.mark.parametrize("name", ["client", "step", "time", "result"])
+    @pytest.mark.parametrize("name", ["client", "map", "step", "time", "result"])
     def test_what_belongs_to_a_game_says_there_is_none(self, name: str) -> None:
         """Zero is a step a game plays and `None` is a game still going, so neither can stand for no game at all."""
         with pytest.raises(NotPlayingError, match="no game has been joined"):
@@ -117,6 +117,7 @@ class TestPlaying:
         assert api.play(client) is Result.VICTORY
         assert api.result is Result.VICTORY
         assert api.client is client
+        assert api.map.name == "Somewhere"
 
     def test_the_map_and_the_tables_are_asked_for_once(self) -> None:
         """The map never changes, the tables are wanted before any upgrade, and game_info alone is 77 KB an ask."""
@@ -168,7 +169,7 @@ class TestPlaying:
     def test_a_step_that_says_the_game_is_over_is_followed_by_asking_how(self) -> None:
         """Only an observation carries the results, so the status on a step is not the end of the game."""
         client, _ = _joined(
-            make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Somewhere")),
+            make_response(game_info=make_game_info()),
             make_response(data=sc2api_pb2.ResponseData()),
             make_response(observation=make_observation(0)),
             make_response(Status.ENDED, step=sc2api_pb2.ResponseStep()),
@@ -178,7 +179,7 @@ class TestPlaying:
 
     def test_a_game_that_ends_without_saying_how_is_undecided(self) -> None:
         client, _ = _joined(
-            make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Somewhere")),
+            make_response(game_info=make_game_info()),
             make_response(data=sc2api_pb2.ResponseData()),
             make_response(Status.ENDED, observation=make_observation(0)),
             make_response(Status.ENDED, observation=make_observation(0)),
