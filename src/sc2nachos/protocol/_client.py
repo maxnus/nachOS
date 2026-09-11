@@ -179,7 +179,10 @@ class Client:
         buffs: bool = True,
         effects: bool = True,
     ) -> sc2api_pb2.ResponseData:
-        """The static tables behind the ids: costs, ranges, requirements and names."""
+        """The tables behind the ids: costs, ranges, requirements and names.
+
+        Unit weapons, armor and movement speed include the upgrades this player holds when it asks.
+        """
         request = sc2api_pb2.RequestData(
             ability_id=abilities,
             unit_type_id=unit_types,

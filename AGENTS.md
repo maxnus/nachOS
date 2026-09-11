@@ -159,6 +159,15 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **`ResponseGameInfo` never changes during a game.** Byte-identical at game loops 0, 256, 1024 and 3008 on
   the same match. python-sc2 re-asks for it on every single step, which is 77 KB a step for a message that holds
   the map, its terrain and who is playing. Ask once, at the start.
+- **`ResponseData` changes with upgrades, and only with them.** Byte-identical across 2000 steps without one.
+  After a debug `upgrade` left the player holding 55 upgrades, 131 of 2005 unit types had changed their
+  `weapons`, `armor` and `movement_speed` -- a Marine went from 6 damage and 0 armor to 7 and 1 -- while the
+  abilities, upgrades, buffs and effects had not. A unit type has one entry and no player, so once anyone has
+  upgraded the tables cannot be right for both sides. Asked at the start of a game, before any upgrade, they
+  are the base values both sides share.
+- **One connection can play game after game.** `sc2api.proto` describes `ended` as "ready for a new game", and
+  a client that left a game on Pylon went on to create and join one on Torches. Anything held because it does
+  not change during a game is held per game, never per connection.
 - **A recorded game is enormous raw and tiny compressed.** A full bare game is 771 exchanges and 63 MB, of
   which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
   default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one

@@ -21,6 +21,8 @@ class _Game:
 
     client: Final[Client]
     info: Final[sc2api_pb2.ResponseGameInfo]
+    # The tables as they stood before any upgrade, which both sides share. Asked again later they fold in this
+    # player's upgrades, and with one entry per unit type they would hand those to the enemy's units too.
     data: Final[sc2api_pb2.ResponseData]
     observation: sc2api_pb2.ResponseObservation | None = None
     step: int = 0
@@ -28,7 +30,7 @@ class _Game:
 
     @classmethod
     def start(cls, client: Client) -> Self:
-        """Start on the game `client` has joined, asking once for the map and the static tables, which never change."""
+        """Start on the game `client` has joined, asking once for its map and for the tables before any upgrade."""
         return cls(client, client.game_info(), client.game_data())
 
     def observe(self, step: int | None = None) -> Result | None:
