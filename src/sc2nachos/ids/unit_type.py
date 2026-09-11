@@ -125,6 +125,7 @@ class UnitTypeId(ReadableIntEnum):
     FACTORY = RawUnitTypeId.Factory
     FACTORY_FLYING = RawUnitTypeId.FactoryFlying
     FLEET_BEACON = RawUnitTypeId.FleetBeacon
+    FORCE_FIELD = RawUnitTypeId.ForceField
     FORGE = RawUnitTypeId.Forge
     FUSION_CORE = RawUnitTypeId.FusionCore
     GATEWAY = RawUnitTypeId.Gateway

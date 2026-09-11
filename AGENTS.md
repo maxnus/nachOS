@@ -172,7 +172,11 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
   are the base values both sides share. burnysc2 asks only then (`sc2/main.py:122`) and applies upgrades from
   hand-written tables in `sc2/constants.py` (`DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, ...), using the
   `attack_upgrade_level` and `armor_upgrade_level` on each unit. `raw.proto` lists those among the fields it
-  fills for every alliance, above its "Not populated for enemies" section.
+  fills for every alliance, above its "Not populated for enemies" section, and the corpus bears it out: every
+  visible enemy unit carries `armor_upgrade_level` and `shield_upgrade_level`, every armed one
+  `attack_upgrade_level` (widow mines, infestors and overseers have none), and the levels rise on zerglings,
+  stalkers, marines and hellbats some nine minutes in. The one cloaked unit seen undetected, an observer, carried
+  none of the three.
 - **One connection can play game after game.** `sc2api.proto` describes `ended` as "ready for a new game", and
   a client that left a game on Pylon went on to create and join one on Torches. Anything held because it does
   not change during a game is held per game, never per connection.
@@ -185,6 +189,10 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
   which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
   default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one
   observation. xz is also the fastest to read back here, since most of the output is long match copies.
+- **A recording is whole only once it is closed.** xz holds back what it has not yet written out, and Python's
+  `lzma` cannot flush mid-stream. A run killed after 10 exchanges left an empty file, after 200 left 96
+  readable, and after 1000 left 930. Reading one back ends in `EOFError`, which `Recording` turns into a
+  `ProtocolError`.
 - **A game against the computer says it is over on the observation that carries the results.** The step before
   it still answers `in_game`. Once over, `step` and `action` are refused with `Game has already ended`, while
   `observation` goes on answering with the results. Nothing in the protocol stops a step being the first to say
@@ -198,12 +206,21 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **Map packs install alongside the maps they replace**, so one map name really does match several files --
   `MagannathaAIE_v2.SC2Map` sits in both `Maps/` and `Maps/AIE/`. A lookup by name must resolve that rather than
   refuse it.
+- **Some units the game reports are effects.** A sentry's force field arrives as a neutral `ForceField` unit
+  and a reaper's grenade as a `KD8Charge`. burnysc2 turns both, and the parasitic bomb's dummy, into effects
+  (`FakeEffectID` in `sc2/constants.py`).
 
 ## Testing
 
 `pytest`. Tests must not require StarCraft II to be installed or running, with the single exception of tests
 marked `@pytest.mark.integration`, which a plain `pytest` run deselects. Everything else runs against recorded
 protobuf fixtures via the fixture transport.
+
+**The corpus** in `tests/corpus` is five whole games, a bare api losing to the computer on current ladder maps,
+recorded by `tools/record_corpus.py`, which says what each one is. Replaying one asks the same questions in the
+same order, so a change to what the library asks a game fails `test_corpus.py` until the corpus is recorded
+again. The bare api gives no orders, so the only orders in it are those the game gives on its own, nearly all of
+them workers mining, and since nothing leaves its base it shows the computer's army but none of its buildings.
 
 | Task | Command |
 |---|---|
@@ -213,3 +230,4 @@ protobuf fixtures via the fixture transport.
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
 | Type check | `uv run pyright` |
 | Regenerate raw ids | `uv run python tools/generate_ids.py` after refreshing `data/stableid.json` |
+| Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |

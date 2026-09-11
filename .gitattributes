@@ -1,0 +1,2 @@
+# Recordings are xz-compressed and must never be touched by line-ending conversion.
+*.sc2rec binary

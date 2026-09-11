@@ -3,6 +3,8 @@
 # The simulation advances 16 steps per second, and ladder and multiplayer games run at the "Faster" speed
 # setting, which is 1.4x. One second of real time is therefore 22.4 steps.
 STEPS_PER_SECOND = 22.4
+# Multiplying by this lands on every whole second exactly. Dividing by 22.4 overshoots those in the top quarter
+# of a power of two: 15 seconds come out as 15.000000000000002.
 SECONDS_PER_STEP = 1 / STEPS_PER_SECOND
 
 

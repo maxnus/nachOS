@@ -17,8 +17,11 @@ class BuffId(ReadableIntEnum):
     CARRYING_MINERALS = RawBuffId.CarryMineralFieldMinerals
     CARRYING_MINERALS_RICH = RawBuffId.CarryHighYieldMineralFieldMinerals
     CONCUSSIVE_SHELLS_SLOW = RawBuffId.DutchMarauderSlow
+    FUNGAL_GROWTH = RawBuffId.FungalGrowth
+    GRAVITON_BEAM = RawBuffId.GravitonBeam
     GUARDIAN_SHIELD = RawBuffId.GuardianShield
     IMMORTAL_BARRIER = RawBuffId.ImmortalOverload
+    PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
     SLOW = RawBuffId.Slow
     STIMPACK = RawBuffId.Stimpack
     STIMPACK_MARAUDER = RawBuffId.StimpackMarauder
