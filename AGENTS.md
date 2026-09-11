@@ -125,6 +125,9 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **`isinstance` against an ABC subclass costs ~6x a plain class when it misses** — ~125 ns against ~20. A
   dispatch chain over `Area` implementations pays that per branch it rejects. Prefer a virtual method; a type
   switch is both slower and closed to new shapes.
+- **Reading a field out of a protobuf message costs over ten times a slot read** — `observation.observation.game_loop`
+  took ~180 ns against ~13 for the same int in a slotted dataclass (protobuf 7.36 on upb, Python 3.12). A value
+  read many times a turn is copied out once, when the observation arrives.
 
 ## Checking what the game contains
 

@@ -91,15 +91,11 @@ def _somewhere() -> Map:
 
 
 class TestBeforeAGame:
-    def test_asking_a_fresh_api_for_its_client_says_there_is_no_game(self) -> None:
+    @pytest.mark.parametrize("name", ["client", "step", "time", "result"])
+    def test_what_belongs_to_a_game_says_there_is_none(self, name: str) -> None:
+        """Zero is a step a game plays and `None` is a game still going, so neither can stand for no game at all."""
         with pytest.raises(NotPlayingError, match="no game has been joined"):
-            _ = Api().client
-
-    def test_a_fresh_api_has_played_nothing(self) -> None:
-        api = Api()
-        assert api.step == 0
-        assert api.time == 0
-        assert api.result is None
+            getattr(Api(), name)
 
     def test_the_steps_per_turn_are_the_ones_asked_for(self) -> None:
         assert Api(steps_per_turn=8).steps_per_turn == 8
@@ -114,7 +110,7 @@ class TestPlaying:
         assert api.client is client
 
     def test_the_map_and_the_tables_are_asked_for_once(self) -> None:
-        """Neither ever changes during a game, and game_info alone is 77 KB an ask."""
+        """The map never changes, the tables are wanted before any upgrade, and game_info alone is 77 KB an ask."""
         client, transport = _joined(*_game(0, 2, 4, 6, 8))
         Api(steps_per_turn=2).play(client)
         kinds = [request.WhichOneof("request") for request in transport.requests]
@@ -126,6 +122,13 @@ class TestPlaying:
         api = Api(steps_per_turn=2)
         api.play(client)
         assert api.step == 4
+
+    def test_a_game_over_when_first_observed_is_never_stepped(self) -> None:
+        client, transport = _joined(*_game(0))
+        api = Api()
+        assert api.play(client) is Result.VICTORY
+        assert api.step == 0
+        assert not any(request.HasField("step") for request in transport.requests)
 
     def test_every_turn_steps_the_game_on_but_the_one_that_ends_it(self) -> None:
         client, transport = _joined(*_game(0, 8, 16))
@@ -145,7 +148,7 @@ class TestPlaying:
         assert api.step == 112
         assert [request.step.count for request in transport.requests if request.HasField("step")] == [112]
 
-    def test_a_realtime_game_asks_for_the_frame_it_wants_instead_of_stepping(self) -> None:
+    def test_a_realtime_game_asks_for_the_step_it_wants_instead_of_stepping(self) -> None:
         """A realtime game runs whether or not anyone is watching, so there is nothing to step."""
         client, transport = _joined(*_game(0, 4, 8, ending=Result.DEFEAT, stepped=False))
         assert Api(steps_per_turn=4).play(client, realtime=True) is Result.DEFEAT

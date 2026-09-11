@@ -24,20 +24,25 @@ class _Game:
     # The tables as they stood before any upgrade, which both sides share. Asked again later they fold in this
     # player's upgrades, and with one entry per unit type they would hand those to the enemy's units too.
     data: Final[sc2api_pb2.ResponseData]
-    observation: sc2api_pb2.ResponseObservation | None = None
-    step: int = 0
+    observation: sc2api_pb2.ResponseObservation
+    # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
+    step: int
     result: Result | None = None
 
     @classmethod
     def start(cls, client: Client) -> Self:
-        """Start on the game `client` has joined, asking once for its map and for the tables before any upgrade."""
-        return cls(client, client.game_info(), client.game_data())
+        """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
+        info, data = client.game_info(), client.game_data()
+        observation = client.observation()
+        return cls(client, info, data, observation, _step(observation))
 
-    def observe(self, step: int | None = None) -> Result | None:
-        """Observe the game now, or once it reaches `step`, and return how it ended if it has."""
+    def observe(self, step: int | None = None) -> None:
+        """Observe the game now, or once it reaches `step`."""
         self.observation = self.client.observation(game_loop=step)
-        # The protocol's game loop is what NachOS calls a step, and this is the one place the two meet.
-        self.step = self.observation.observation.game_loop
+        self.step = _step(self.observation)
+
+    def outcome(self) -> Result | None:
+        """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
         if (result := self.client.result) is not None:
             return self.finish(result)
         if not self.client.in_game:
@@ -53,6 +58,12 @@ class _Game:
         return result
 
 
+def _step(observation: sc2api_pb2.ResponseObservation) -> int:
+    """The step `observation` was made at."""
+    # The protocol's game loop is what NachOS calls a step, and this is the one place the two meet.
+    return observation.observation.game_loop
+
+
 class Api:
     """Everything a bot talks to, built before there is a game to talk to.
 
@@ -62,6 +73,9 @@ class Api:
 
     Time is counted in steps. One step is one game loop, 22.4 of them make a second, and the bot takes a turn
     every `steps_per_turn` of them.
+
+    What belongs to a game raises `NotPlayingError` until the first game starts. Once a game is over it goes on
+    answering from that game until the next one starts.
     """
 
     def __init__(self, *, steps_per_turn: int = 1) -> None:
@@ -77,15 +91,17 @@ class Api:
 
     @property
     def client(self) -> Client:
-        """The client of the game being played, or of the last one once it is over."""
+        """The client the game is played on."""
         if self._game is None:
             raise NotPlayingError("no game has been joined")
         return self._game.client
 
     @property
     def step(self) -> int:
-        """The step the game had reached when it was last observed, which is zero before it has been."""
-        return self._game.step if self._game is not None else 0
+        """The step the game had reached when it was last observed."""
+        if self._game is None:
+            raise NotPlayingError("no game has been joined")
+        return self._game.step
 
     @property
     def time(self) -> float:
@@ -95,7 +111,9 @@ class Api:
     @property
     def result(self) -> Result | None:
         """How the game ended for this player, or `None` while it is still being played."""
-        return self._game.result if self._game is not None else None
+        if self._game is None:
+            raise NotPlayingError("no game has been joined")
+        return self._game.result
 
     def play(self, client: Client, *, realtime: bool = False, time_limit: float | None = None) -> Result:
         """Play the game `client` has already joined to its end, and return how it ended for this player.
@@ -109,17 +127,17 @@ class Api:
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.info.map_name, self._steps_per_turn)
 
-        while True:
-            # A realtime game runs whether or not anyone is watching, so each turn after the first asks for the
-            # step it wants.
-            target = game.step + self._steps_per_turn if realtime and game.observation is not None else None
-            if (result := game.observe(target)) is not None:
-                return result
+        while (result := game.outcome()) is None:
             if time_limit is not None and self.time >= time_limit:
                 logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
                 return game.finish(Result.TIE)
 
             # A turn's work belongs here, once there is any: the event dispatch and the flush of orders.
 
-            if not realtime:
+            if realtime:
+                # A realtime game runs whether or not anyone is watching, so each turn asks for the step it wants.
+                game.observe(game.step + self._steps_per_turn)
+            else:
                 client.step(self._steps_per_turn)
+                game.observe()
+        return result
