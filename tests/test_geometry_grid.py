@@ -462,6 +462,37 @@ class TestSummaries:
             Grid.zeros(3, 3).where(numpy.ones((3, 3), dtype=bool), 0.0)  # pyright: ignore[reportArgumentType]
 
 
+class TestReadOnly:
+    def grid(self) -> Grid[float]:
+        """A grid as the library hands one out, sharing its values with everything that reads them."""
+        return Grid(numpy.ones((4, 4)), readonly=True)
+
+    def test_writing_to_one_raises_and_says_what_to_do(self) -> None:
+        with pytest.raises(TypeError, match="is read-only"):
+            self.grid()[Tile(0, 0)] = 2.0
+
+    def test_filling_one_raises_too(self) -> None:
+        with pytest.raises(TypeError, match="is read-only"):
+            self.grid().fill(2.0)
+
+    def test_a_copy_can_be_written_to(self) -> None:
+        copy = self.grid().copy()
+        copy[Tile(0, 0)] = 2.0
+        assert not copy.readonly
+
+    def test_reading_a_different_value_outside_keeps_it_read_only(self) -> None:
+        """It shares the values it was built on, so it cannot come back writable."""
+        assert self.grid().with_outside(0.0).readonly
+
+    def test_what_a_grid_derives_can_be_written_to(self) -> None:
+        grid = self.grid()
+        derived = (grid + 1, grid.cropped(Rectangle(0, 0, 2, 2)), grid.smoothed(1.0), Grid.like(grid))
+        assert not any(one.readonly for one in derived)
+
+    def test_a_grid_is_writable_unless_it_says_otherwise(self) -> None:
+        assert not Grid.zeros(2, 2).readonly
+
+
 class TestMutation:
     def test_copy_is_independent(self) -> None:
         grid = playable_grid()

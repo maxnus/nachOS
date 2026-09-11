@@ -33,27 +33,34 @@ class Grid[T: float]:
 
     `origin` is the tile at the grid's lower left corner, so a grid can cover the playable area alone. An
     area reaching past the edge is clipped to the tiles the grid holds; a point outside it raises `IndexError`.
+
+    A grid the library hands out while keeping it, such as the map's, is `readonly` and refuses every write.
+    `copy()` gives one to change, as does anything else derived from a grid.
     """
 
-    __slots__ = ("_data", "_origin", "_outside")
+    __slots__ = ("_data", "_origin", "_outside", "_readonly")
 
     _data: ndarray
     _origin: Tile
     _outside: T | None
+    _readonly: bool
 
     # --- Construction
 
-    def __init__(self, data: ndarray, *, origin: Tile = _ORIGIN, outside: T | None = None) -> None:
+    def __init__(
+        self, data: ndarray, *, origin: Tile = _ORIGIN, outside: T | None = None, readonly: bool = False
+    ) -> None:
         """A grid holding `data`, whose `[0, 0]` entry is the tile at `origin`.
 
         `outside` is what reading a point beyond the grid answers; without it such a read raises. Writing
-        beyond the grid always raises.
+        beyond the grid always raises, and a `readonly` grid refuses every write.
         """
         if data.ndim != 2:
             raise ValueError(f"a grid is two-dimensional, got {data.ndim} dimensions")
         self._data = data
         self._origin = origin
         self._outside = outside
+        self._readonly = readonly
 
     @classmethod
     def zeros(
@@ -120,9 +127,17 @@ class Grid[T: float]:
         """What a read beyond the grid answers, or None if one raises."""
         return self._outside
 
+    @property
+    def readonly(self) -> bool:
+        """Whether this grid refuses to be written to."""
+        return self._readonly
+
     def with_outside(self, value: T | None) -> Grid[T]:
-        """The same grid, reading `value` beyond its edge. Shares the data rather than copying it."""
-        return Grid(self._data, origin=self._origin, outside=value)
+        """The same grid, reading `value` beyond its edge. Shares the data rather than copying it.
+
+        A read-only grid stays one, since the values are the same.
+        """
+        return Grid(self._data, origin=self._origin, outside=value, readonly=self._readonly)
 
     def _value_at(self, point: PointLike) -> T:
         """The value at `point`, or `outside` for a point the grid does not cover."""
@@ -172,6 +187,7 @@ class Grid[T: float]:
 
     def __setitem__(self, key: PointLike | Area | Grid[bool], value: T | ndarray) -> None:
         """Writes a value at a point, over an area, or over the tiles a mask selects."""
+        self._refuse_readonly()
         if isinstance(key, tuple):
             self._data[self.index_of(key)] = value
         elif isinstance(key, Rectangle):
@@ -185,7 +201,13 @@ class Grid[T: float]:
 
     def fill(self, value: T) -> None:
         """Sets every tile to `value`."""
+        self._refuse_readonly()
         self._data[:] = value
+
+    def _refuse_readonly(self) -> None:
+        """Raises unless this grid can be written to."""
+        if self._readonly:
+            raise TypeError(f"{self!r} is read-only, because it is shared; copy() it to change it")
 
     def _slices(self, rectangle: Rectangle) -> tuple[slice, slice]:
         """The array slices covering the tiles of `rectangle`, clipped to the grid."""

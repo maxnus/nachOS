@@ -86,7 +86,8 @@ class TestReadingAMap:
 
     def test_the_grids_refuse_writes_but_a_copy_does_not(self) -> None:
         game_map = GameMap(make_game_info())
-        with pytest.raises(ValueError, match="read-only"):
+        assert game_map.pathing.readonly
+        with pytest.raises(TypeError, match="is read-only"):
             game_map.pathing[Tile(0, 0)] = False
         copy = game_map.pathing.copy()
         copy[Tile(0, 0)] = False
