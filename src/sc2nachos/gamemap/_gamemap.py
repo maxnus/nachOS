@@ -105,7 +105,10 @@ class GameMap:
 
     @property
     def opponent_start_locations(self) -> tuple[Point, ...]:
-        """Where the opponent may have started: every start location on the map but this player's own."""
+        """Where the opponent may have started: every start location on the map but this player's own.
+
+        Each is where a townhall stands, which is a tile's center, so `Tile.containing` reads one exactly.
+        """
         return self._opponent_start_locations
 
 
