@@ -6,11 +6,19 @@ import pytest
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api
+from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
+from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, ReplayTransport
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
+
+_CURATED: tuple[type[ReadableIntEnum], ...] = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
+# Obstacles on current maps that the curated set leaves out on purpose, because no size names them. M3 has to let
+# a bot meet one without raising.
+_UNNAMED_OBSTACLES = {RawUnitTypeId.DestructibleRockEx1DiagonalHugeBLUR, RawUnitTypeId.DestructibleExpeditionGate6x6}
 
 
 def _observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:
@@ -41,3 +49,22 @@ def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> 
     client.leave_game()
     client.quit()
 
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_every_id_a_game_reported_is_curated(path: Path) -> None:
+    """A curated enum raises on an id it leaves out, so leaving out one a real game reports is a crash."""
+    reported: dict[type[ReadableIntEnum], set[int]] = {enum: set() for enum in _CURATED}
+    for observation in _observations(Recording(path)):
+        raw = observation.observation.raw_data
+        for unit in raw.units:
+            reported[UnitTypeId].add(unit.unit_type)
+            reported[UnitTypeId].update(passenger.unit_type for passenger in unit.passengers)
+            reported[BuffId].update(unit.buff_ids)
+            reported[AbilityId].update(order.ability_id for order in unit.orders)
+        reported[UpgradeId].update(raw.player.upgrade_ids)
+        reported[EffectId].update(effect.effect_id for effect in raw.effects)
+
+    known = {enum: {int(member) for member in enum} for enum in _CURATED}
+    known[UnitTypeId] |= _UNNAMED_OBSTACLES
+    missing = {enum.__name__: sorted(ids - known[enum]) for enum, ids in reported.items()}
+    assert not any(missing.values()), f"{path.stem} reported ids with no curated member: {missing}"

@@ -200,6 +200,9 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **Map packs install alongside the maps they replace**, so one map name really does match several files --
   `MagannathaAIE_v2.SC2Map` sits in both `Maps/` and `Maps/AIE/`. A lookup by name must resolve that rather than
   refuse it.
+- **Some units the game reports are effects.** A sentry's force field arrives as a neutral `ForceField` unit
+  and a reaper's grenade as a `KD8Charge`. burnysc2 turns both, and the parasitic bomb's dummy, into effects
+  (`FakeEffectID` in `sc2/constants.py`).
 
 ## Testing
 
