@@ -36,7 +36,7 @@ class _Game:
         """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
-        return cls(client, GameMap.from_proto(info), data, observation, _step(observation))
+        return cls(client, GameMap(info), data, observation, _step(observation))
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""

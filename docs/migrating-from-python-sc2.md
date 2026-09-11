@@ -90,7 +90,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `game_info.map_name` | `api.map.name` |
 | `game_info.pathing_grid`, `in_pathing_grid(p)` | `api.map.pathing`, `api.map.pathing[p]` |
 | `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` |
-| `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height[p]` |
+| `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `enemy_start_locations` | `api.map.opponent_start_locations` |
 
@@ -100,7 +100,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   step. `copy()` a NachOS grid to change it.
 - **Height is the ground's height, not a byte, and python-sc2 decodes the byte a little low.** Its
   `terrain_height` holds the byte the game sends. Its `get_terrain_z_height` computes `-16 + 32 * byte / 255`,
-  which reads up to 0.03 below where units stand. A byte is an eighth of a unit of height, with 127 at zero, so
-  `api.map.height` holds `(byte - 127) / 8`.
-- **A tile's height is the height at its lower left corner**, in both libraries, not at its center. On a ramp,
-  the rest of the tile can be up to 0.41 higher or lower.
+  which reads up to 0.03 below where units stand. A byte is an eighth of a unit of height, with 127 at zero.
+- **A tile's height is its center's.** The game sends the height at each tile's lower left corner, and python-sc2
+  reads that as the tile's. On a ramp, that is up to 0.41 off the ground elsewhere in the tile, and beside a cliff
+  it can be the level on the other side. `api.map.height` averages the tile's corners on its own side of any
+  cliff, and `api.map.height_at(p)` interpolates between them.

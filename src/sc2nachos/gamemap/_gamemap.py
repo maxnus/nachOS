@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, final
 
 import numpy
 
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
+from sc2nachos.geometry._point import coordinates
 from sc2nachos.protocol import ProtocolError
 
 if TYPE_CHECKING:
     from numpy import ndarray
     from s2clientprotocol import common_pb2, sc2api_pb2
 
+    from sc2nachos.geometry import PointLike
 
-@dataclass(frozen=True, slots=True, eq=False)
+# Corners of one tile this far apart in height are on either side of a cliff. Across a ramp they are at most 1.25
+# apart, and across a cliff at least 2.
+_CLIFF = 1.0
+
+
+@final
 class GameMap:
     """The map a game is played on, as the game describes it when the game starts. None of it changes.
 
@@ -25,48 +31,84 @@ class GameMap:
     raises. Everything that reads the map shares its grids, so they refuse writes: `copy()` one to change it.
     """
 
-    name: str
-    """The name the map is shown under, such as `Pylon AIE`."""
+    __slots__ = ("_corners", "_height", "_name", "_opponent_start_locations", "_pathing", "_placement", "_playable")
 
-    playable_area: Rectangle
-    """The part of the map a unit can be in."""
-
-    pathing: Grid[bool]
-    """Where a ground unit can walk as the game starts. Rocks block it, and so do this player's own starting
-    townhall, mineral fields and geysers, but no other resources."""
-
-    placement: Grid[bool]
-    """Where a structure can go as the game starts. Rocks block it, but no resource or townhall does."""
-
-    height: Grid[float]
-    """The height of the ground at each tile's lower left corner, in the units of a unit's `z`, in eighths.
-
-    Units on flat ground stand within 0.15 of it. On a ramp, the rest of a tile can be up to 0.41 higher or lower
-    than its corner, and beside a cliff the corner can be on the other level."""
-
-    opponent_start_locations: tuple[Point, ...]
-    """Where the opponent may have started: every start location on the map but this player's own."""
-
-    @classmethod
-    def from_proto(cls, info: sc2api_pb2.ResponseGameInfo) -> Self:
+    def __init__(self, info: sc2api_pb2.ResponseGameInfo) -> None:
         """Read the map out of the game's answer to `RequestGameInfo`."""
         start = info.start_raw
-        playable_area = Rectangle.from_proto(start.playable_area)
+        playable = Rectangle.from_proto(start.playable_area)
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
-        # A byte is an eighth of a unit of height, and 127 is zero.
-        height = (_pixels(start.terrain_height, playable_area).astype(float) - 127) / 8
-        return cls(
-            name=info.map_name,
-            playable_area=playable_area,
-            pathing=Grid(_read_only(_pixels(start.pathing_grid, playable_area) != 0), origin=origin, outside=False),
-            placement=Grid(_read_only(_pixels(start.placement_grid, playable_area) != 0), origin=origin, outside=False),
-            height=Grid(_read_only(height), origin=origin),
-            opponent_start_locations=tuple(Point.from_proto(location) for location in start.start_locations),
+        self._name = info.map_name
+        self._playable = playable
+        self._pathing = Grid(_read_only(_tiles(start.pathing_grid, playable) != 0), origin=origin, outside=False)
+        self._placement = Grid(_read_only(_tiles(start.placement_grid, playable) != 0), origin=origin, outside=False)
+        self._corners = _read_only(_corners_by_tile(_corner_heights(start.terrain_height, playable)))
+        self._height = Grid(_read_only(self._corners.mean(axis=-1)), origin=origin)
+        self._opponent_start_locations = tuple(Point.from_proto(location) for location in start.start_locations)
+
+    @property
+    def name(self) -> str:
+        """The name the map is shown under, such as `Pylon AIE`."""
+        return self._name
+
+    @property
+    def playable_area(self) -> Rectangle:
+        """The part of the map a unit can be in."""
+        return self._playable
+
+    @property
+    def pathing(self) -> Grid[bool]:
+        """Where a ground unit can walk as the game starts.
+
+        Rocks block it, and so do this player's own starting townhall, mineral fields and geysers, but no other
+        resources.
+        """
+        return self._pathing
+
+    @property
+    def placement(self) -> Grid[bool]:
+        """Where a structure can go as the game starts. Rocks block it, but no resource or townhall does."""
+        return self._placement
+
+    @property
+    def height(self) -> Grid[float]:
+        """The height of the ground at the center of each tile, in the units of a unit's `z`.
+
+        A unit at a tile's center stands within 0.05 of it nine times in ten, and `height_at` is closer for any other
+        point. Some maps raise their ramps above the heights the game sends, though, by as much as 0.76.
+        """
+        return self._height
+
+    def height_at(self, point: PointLike) -> float:
+        """The height of the ground at `point`, interpolated between the corners of the tile it is in.
+
+        A unit standing at `point` is within 0.03 of it nine times in ten, but as far off as `height` on a map that
+        raises its ramps. Raises `IndexError` past the playable area.
+        """
+        position = coordinates(point)
+        x, y = position[0], position[1]
+        column, row = math.floor(x), math.floor(y)
+        origin = self._height.origin
+        i, j = column - origin[0], row - origin[1]
+        if not (0 <= i < self._corners.shape[0] and 0 <= j < self._corners.shape[1]):
+            raise IndexError(f"{Tile(column, row)!r} lies outside {self._playable!r}")
+        low_left, low_right, up_left, up_right = self._corners[i, j].tolist()
+        dx, dy = x - column, y - row
+        return (
+            low_left
+            + (low_right - low_left) * dx
+            + (up_left - low_left) * dy
+            + (low_left - low_right - up_left + up_right) * dx * dy
         )
 
+    @property
+    def opponent_start_locations(self) -> tuple[Point, ...]:
+        """Where the opponent may have started: every start location on the map but this player's own."""
+        return self._opponent_start_locations
 
-def _pixels(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
-    """The pixels of `image` over the tiles of `area`, indexed `[x, y]`."""
+
+def _image(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
+    """The whole of `image`, indexed `[x, y]`, once it is known to be as large as it says and to cover `area`."""
     width, height, bits = image.size.x, image.size.y, image.bits_per_pixel
     if bits not in (1, 8) or len(image.data) != math.ceil(width * height * bits / 8):
         raise ProtocolError(f"a {width} by {height} image of {bits} bits a pixel cannot be {len(image.data)} bytes")
@@ -76,9 +118,47 @@ def _pixels(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
     if bits == 1:
         pixels = numpy.unpackbits(pixels, count=width * height)
     # Each row is one y, from the bottom of the map up.
+    return pixels.reshape(height, width).T
+
+
+def _tiles(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
+    """The pixels of `image` over the tiles of `area`."""
     xs, ys = area.tile_range()
-    rows = pixels.reshape(height, width)[ys.start : ys.stop, xs.start : xs.stop]
-    return numpy.ascontiguousarray(rows.T)
+    return numpy.ascontiguousarray(_image(image, area)[xs.start : xs.stop, ys.start : ys.stop])
+
+
+def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
+    """The height at every corner of the tiles of `area`, one more of them across and up than there are tiles.
+
+    The game gives the height at each tile's lower left corner, not at its center: an eighth of a unit to a byte,
+    with 127 at zero.
+    """
+    xs, ys = area.tile_range()
+    corners = _image(image, area)[xs.start : xs.stop + 1, ys.start : ys.stop + 1]
+    # An area reaching the far edge of the image has no corners past it, so the edge's own stand in for them.
+    missing = (len(xs) + 1 - corners.shape[0], len(ys) + 1 - corners.shape[1])
+    corners = numpy.pad(corners, ((0, missing[0]), (0, missing[1])), mode="edge")
+    return (corners.astype(float) - 127) / 8
+
+
+def _corners_by_tile(heights: ndarray) -> ndarray:
+    """The heights of each tile's lower left, lower right, upper left and upper right corners, as the tile stands.
+
+    A corner on a cliff line has one height, which is the wrong level for the tiles on its other side. A tile
+    stands on the side most of its corners are on, and on the upper side when they split two and two, as measured
+    on every map of the 2025 pool. Its corners on the far side take the mean height of those on its own.
+    """
+    corners = numpy.stack((heights[:-1, :-1], heights[1:, :-1], heights[:-1, 1:], heights[1:, 1:]), axis=-1)
+    ordered = numpy.sort(corners, axis=-1)
+    cliff = ordered[..., 3] - ordered[..., 0] >= _CLIFF
+    # The widest step in height between corners, in order, separates the two levels.
+    step = numpy.argmax(numpy.diff(ordered, axis=-1), axis=-1)
+    below = numpy.take_along_axis(ordered, step[..., numpy.newaxis], axis=-1)
+    # Split after the first or the second corner, the tile is on the upper side, and after the third on the lower.
+    upper = (step < 2)[..., numpy.newaxis]
+    own_side = numpy.where(upper, corners > below, corners <= below) | ~cliff[..., numpy.newaxis]
+    side_height = (corners * own_side).sum(axis=-1) / own_side.sum(axis=-1)
+    return numpy.where(own_side, corners, side_height[..., numpy.newaxis])
 
 
 def _read_only(values: ndarray) -> ndarray:
