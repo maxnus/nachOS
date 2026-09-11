@@ -1,6 +1,7 @@
 """Everything a bot talks to."""
 
 from dataclasses import dataclass
+from typing import Final, Self
 
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
@@ -18,12 +19,29 @@ class NotPlayingError(Exception):
 class _Game:
     """One game as it is played: the client it is played on, and everything seen of it so far."""
 
-    client: Client
-    info: sc2api_pb2.ResponseGameInfo
-    data: sc2api_pb2.ResponseData
+    client: Final[Client]
+    info: Final[sc2api_pb2.ResponseGameInfo]
+    data: Final[sc2api_pb2.ResponseData]
     observation: sc2api_pb2.ResponseObservation | None = None
     step: int = 0
     result: Result | None = None
+
+    @classmethod
+    def start(cls, client: Client) -> Self:
+        """Start on the game `client` has joined, asking once for the map and the static tables, which never change."""
+        return cls(client, client.game_info(), client.game_data())
+
+    def observe(self, step: int | None = None) -> Result | None:
+        """Observe the game now, or once it reaches `step`, and return how it ended if it has."""
+        self.observation = self.client.observation(game_loop=step)
+        # The protocol's game loop is what NachOS calls a step, and this is the one place the two meet.
+        self.step = self.observation.observation.game_loop
+        if (result := self.client.result) is not None:
+            return self.finish(result)
+        if not self.client.in_game:
+            # Over, and the game would not say how even when the client asked it again.
+            return self.finish(Result.UNDECIDED)
+        return None
 
     def finish(self, result: Result) -> Result:
         """Settle how the game ended, and say so."""
@@ -85,8 +103,7 @@ class Api:
 
         Each call starts its game from nothing, so one api plays any number of games, one after another.
         """
-        # The map and the static tables never change during a game, so they are asked for once.
-        game = _Game(client, client.game_info(), client.game_data())
+        game = _Game.start(client)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.info.map_name, self._steps_per_turn)
 
@@ -94,15 +111,8 @@ class Api:
             # A realtime game runs whether or not anyone is watching, so each turn after the first asks for the
             # step it wants.
             target = game.step + self._steps_per_turn if realtime and game.observation is not None else None
-            game.observation = client.observation(game_loop=target)
-            # The protocol's game loop is what NachOS calls a step, and this is the one place the two meet.
-            game.step = game.observation.observation.game_loop
-
-            if (result := client.result) is not None:
-                return game.finish(result)
-            if not client.in_game:
-                # Over, and the game would not say how even when the client asked it again.
-                return game.finish(Result.UNDECIDED)
+            if (result := game.observe(target)) is not None:
+                return result
             if time_limit is not None and self.time >= time_limit:
                 logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
                 return game.finish(Result.TIE)

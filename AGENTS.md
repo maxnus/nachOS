@@ -17,6 +17,10 @@ Use the AvocaDOS virtual environment: `../AvocaDOS/.venv/Scripts/python.exe`. Ne
 `encoding="utf-8"` to both, or an em dash written back to a source file silently becomes invalid UTF-8
 and ruff refuses to read it.
 
+**A `Final` dataclass field can only be set by the generated `__init__`.** It is an ordinary field at runtime,
+`slots=True` included, and pyright rejects any later assignment -- in `__post_init__` too. So a field that is
+fetched rather than passed in comes from a classmethod that calls the constructor, as `_Game.start` does.
+
 ## Core design rules
 
 These are the non-negotiables. They exist because this library is published for others, not just used by AvocaDOS.
