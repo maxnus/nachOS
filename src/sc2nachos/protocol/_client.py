@@ -9,13 +9,15 @@ from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos.match import Computer, Participant, Player, Race, Result
-from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, ProtocolError
+from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, GameNotStartedError, ProtocolError
 from sc2nachos.protocol._ports import GamePorts
 from sc2nachos.protocol._status import Status
 from sc2nachos.protocol._transport import Transport
 
-# What the game says when it is asked for something only a running game can give.
+# What the game says when it is asked for something only a running game can give, once the game is over.
 _GAME_OVER_ERRORS = frozenset({"Game has already ended", "Not supported if game has already ended"})
+# And what it says before one has started, which includes after the client has left the last one.
+_NOT_STARTED_ERRORS = frozenset({"A game has not been started yet"})
 
 
 # The answers this client knows how to read. Spelled out rather than taken as a `str` so that pyright checks
@@ -222,9 +224,9 @@ class Client:
     def leave_game(self) -> None:
         """Leave the game, which concedes it if it has not already ended.
 
-        Leaving a game that is already over, or whose connection has already gone, does nothing.
+        Leaving a game that never started, that is already over, or whose connection has gone does nothing.
         """
-        with suppress(GameEndedError, ConnectionClosedError):
+        with suppress(GameNotStartedError, GameEndedError, ConnectionClosedError):
             self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
 
     def quit(self) -> None:
@@ -256,6 +258,8 @@ class Client:
             errors = list(response.error)
             if _GAME_OVER_ERRORS.intersection(errors):
                 raise GameEndedError(f"the game is over: {'; '.join(errors)}")
+            if _NOT_STARTED_ERRORS.intersection(errors):
+                raise GameNotStartedError(f"no game has started: {'; '.join(errors)}")
             raise ProtocolError(f"the game refused the request: {'; '.join(errors)}")
         if answer is not None and not response.HasField(answer):
             asked = response.WhichOneof("response") or "nothing"

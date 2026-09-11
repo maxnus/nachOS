@@ -19,8 +19,8 @@ class NotPlayingError(Exception):
 class Api:
     """Everything a bot talks to, built before there is a game to talk to.
 
-    Construct one where the rest of your bot can reach it, then hand it to `run_local` or `run_ladder`. Never
-    subclass it: helpers of your own belong in your own modules, as ordinary functions.
+    Construct one for each game, where the rest of your bot can reach it, then hand it to `run_local` or
+    `run_ladder`. Never subclass it: helpers of your own belong in your own modules, as ordinary functions.
     """
 
     def __init__(self, *, step_size: int = 1) -> None:
@@ -71,7 +71,11 @@ class Api:
 
         `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way,
         such as a recording. `time_limit` gives up on a game that is taking too long, in game seconds.
+
+        An api plays one game, so calling this a second time raises `RuntimeError`.
         """
+        if self._client is not None:
+            raise RuntimeError("an api plays one game, so make a new one for the next")
         self._client = client
         # The map and the static tables never change during a game, so they are asked for once.
         self._game_info = client.game_info()
@@ -84,8 +88,11 @@ class Api:
             self._observation = client.observation(game_loop=target)
             self._game_loop = self._observation.observation.game_loop
 
-            if client.result is not None:
-                return self._finish(client.result)
+            if (result := client.result) is not None:
+                return self._finish(result)
+            if not client.in_game:
+                # Over, and the game would not say how even when the client asked it again.
+                return self._finish(Result.UNDECIDED)
             if time_limit is not None and self.time >= time_limit:
                 logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
                 return self._finish(Result.TIE)
@@ -95,8 +102,6 @@ class Api:
 
             if not realtime:
                 client.step(self._step_size)
-            if not client.in_game:
-                return self._finish(client.result if client.result is not None else Result.UNDECIDED)
 
     def _finish(self, result: Result) -> Result:
         """Settle how the game ended, and say so."""

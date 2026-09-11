@@ -8,7 +8,7 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
-from sc2nachos.protocol import Client, Recording, ReplayTransport, Status, WebSocketTransport
+from sc2nachos.protocol import Client, ProtocolError, Recording, ReplayTransport, Status, WebSocketTransport
 from support import FakeTransport, make_observation, make_response
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
@@ -155,15 +155,33 @@ class TestPlaying:
         assert asked == [0, 4, 8]
         assert not any(request.HasField("step") for request in transport.requests)
 
-    def test_a_game_the_client_left_ends_undecided(self) -> None:
-        """Leaving takes the client out of the game without the game ever saying who won."""
+    def test_a_step_that_says_the_game_is_over_is_followed_by_asking_how(self) -> None:
+        """Only an observation carries the results, so the status on a step is not the end of the game."""
         client, _ = _joined(
             make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Somewhere")),
             make_response(data=sc2api_pb2.ResponseData()),
             make_response(observation=make_observation(0)),
             make_response(Status.ENDED, step=sc2api_pb2.ResponseStep()),
+            make_response(Status.ENDED, observation=make_observation(2, (1, Result.DEFEAT))),
+        )
+        assert Api(step_size=2).play(client) is Result.DEFEAT
+
+    def test_a_game_that_ends_without_saying_how_is_undecided(self) -> None:
+        client, _ = _joined(
+            make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Somewhere")),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(Status.ENDED, observation=make_observation(0)),
+            make_response(Status.ENDED, observation=make_observation(0)),
         )
         assert Api().play(client) is Result.UNDECIDED
+
+    def test_an_api_plays_one_game(self) -> None:
+        api = Api(step_size=2)
+        api.play(_joined(*_game(0, 2))[0])
+        client, transport = _joined(*_game(0, 2))
+        with pytest.raises(RuntimeError, match="plays one game"):
+            api.play(client)
+        assert [request.WhichOneof("request") for request in transport.requests] == ["join_game"]
 
 
 class TestRunningLocally:
@@ -205,6 +223,42 @@ class TestRunningLocally:
         assert transport.closed
         assert game.terminated
 
+    def test_a_game_that_could_not_be_created_raises_why_and_is_still_torn_down(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The game also refuses to leave a game it never started, which must not hide why it never started."""
+        refusal = sc2api_pb2.ResponseCreateGame(error=sc2api_pb2.ResponseCreateGame.InvalidMapPath)
+        transport = FakeTransport(
+            make_response(Status.LAUNCHED, create_game=refusal),
+            make_response(Status.LAUNCHED, error=["A game has not been started yet"]),
+            make_response(Status.QUIT),
+        )
+        game = _no_real_game(monkeypatch, transport)
+        with pytest.raises(ProtocolError, match="InvalidMapPath"):
+            run_local(_somewhere(), [ApiBot(Api(), Race.TERRAN), Computer()])
+        assert any(request.HasField("quit") for request in transport.requests)
+        assert transport.closed
+        assert game.terminated
+
+    def test_the_recording_is_finished_even_when_leaving_fails(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        transport = FakeTransport(
+            make_response(create_game=sc2api_pb2.ResponseCreateGame()),
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+            *_game(0, 2),
+            make_response(error=["Something no game has said yet"]),
+        )
+        _no_real_game(monkeypatch, transport)
+        path = tmp_path / "game.sc2rec"
+        with pytest.raises(ProtocolError, match="Something no game has said yet"):
+            run_local(_somewhere(), [ApiBot(Api(step_size=2), Race.TERRAN), Computer()], record_to=path)
+        assert transport.closed
+        assert [exchange.request.WhichOneof("request") for exchange in Recording(path)][-2:] == [
+            "observation",
+            "leave_game",
+        ]
+
     @pytest.mark.parametrize(
         "players",
         [[], [Computer()], [ApiBot(Api(), Race.TERRAN), ApiBot(Api(), Race.ZERG)]],
@@ -242,6 +296,17 @@ class TestRunningOnALadder:
         run_ladder(ApiBot(Api(step_size=2), Race.TERRAN), host="127.0.0.1", port=8000)
         assert not any(request.HasField("quit") for request in transport.requests)
         assert any(request.HasField("leave_game") for request in transport.requests)
+        assert transport.closed
+
+    def test_the_connection_is_closed_even_when_leaving_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = FakeTransport(
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+            *_game(0, 2),
+            make_response(error=["Something no game has said yet"]),
+        )
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        with pytest.raises(ProtocolError, match="Something no game has said yet"):
+            run_ladder(ApiBot(Api(step_size=2), Race.TERRAN), host="127.0.0.1", port=8000)
         assert transport.closed
 
 

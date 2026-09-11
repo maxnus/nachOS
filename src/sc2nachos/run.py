@@ -1,6 +1,7 @@
 """Playing a game, on a client this library starts or one a ladder has already started."""
 
 from collections.abc import Sequence
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,8 +46,7 @@ def run_local(
     # A participant tells the game that a client will fill the slot; who fills it is settled at the join.
     setups: list[Player] = [Participant() if isinstance(player, ApiBot) else player for player in players]
 
-    with GameProcess.launch(installation, window=window) as game:
-        client = _connect(game.url, record_to)
+    with GameProcess.launch(installation, window=window) as game, closing(_connect(game.url, record_to)) as client:
         try:
             client.create_game(game_map.path, setups, realtime=realtime, random_seed=random_seed)
             client.join_game(bot.race, name=bot.name)
@@ -54,7 +54,6 @@ def run_local(
         finally:
             client.leave_game()
             client.quit()
-            client.close()
 
 
 def run_ladder(
@@ -72,15 +71,14 @@ def run_ladder(
     The ladder starts the client and creates the match, then hands the bot its address and `start_port` on the
     command line. A game against the built-in computer has no `start_port`, since nobody else is joining.
     """
-    client = _connect(f"ws://{host}:{port}/sc2api", record_to)
-    try:
-        ports = GamePorts.from_start_port(start_port) if start_port is not None else None
-        client.join_game(bot.race, name=bot.name, ports=ports)
-        return bot.api.play(client, realtime=realtime, time_limit=time_limit)
-    finally:
-        # The ladder owns the client it started, so it is left running to be told what to do next.
-        client.leave_game()
-        client.close()
+    with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
+        try:
+            ports = GamePorts.from_start_port(start_port) if start_port is not None else None
+            client.join_game(bot.race, name=bot.name, ports=ports)
+            return bot.api.play(client, realtime=realtime, time_limit=time_limit)
+        finally:
+            # The ladder owns the client it started, so it is left running to be told what to do next.
+            client.leave_game()
 
 
 def _only_bot(players: Sequence[ApiBot | Computer]) -> ApiBot:

@@ -9,6 +9,10 @@ class GameEndedError(ProtocolError):
     """The request needs a game in progress, and this one is over."""
 
 
+class GameNotStartedError(ProtocolError):
+    """The request needs a game in progress, and none has been started."""
+
+
 class ConnectionClosedError(ProtocolError):
     """The connection to the game is gone, so the request cannot be answered."""
 

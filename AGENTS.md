@@ -153,6 +153,16 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
   which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
   default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one
   observation. xz is also the fastest to read back here, since most of the output is long match copies.
+- **A game against the computer says it is over on the observation that carries the results.** The step before
+  it still answers `in_game`. Once over, `step` and `action` are refused with `Game has already ended`, while
+  `observation` goes on answering with the results. Nothing in the protocol stops a step being the first to say
+  `ended`, so a runner has to follow any end with an observation before it can say who won.
+- **Leaving is refused whenever there is no game to leave**: before one is created, after a `create_game` the
+  game refused, between create and join, and after having already left. Each answers
+  `A game has not been started yet`, which a cleanup path has to forgive or it will hide the error that got it
+  there. Leaving from `in_game` is accepted and returns the client to `launched`.
+- **A game that is killed makes websocket-client raise a bare `ConnectionResetError`** (WinError 10054), not
+  one of its own `WebSocketException`s, so a transport has to translate the OS error too.
 - **Map packs install alongside the maps they replace**, so one map name really does match several files --
   `MagannathaAIE_v2.SC2Map` sits in both `Maps/` and `Maps/AIE/`. A lookup by name must resolve that rather than
   refuse it.

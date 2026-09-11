@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 from s2clientprotocol import error_pb2, raw_pb2, sc2api_pb2
-from websocket import WebSocket
+from websocket import WebSocket, WebSocketTimeoutException
 
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
@@ -14,6 +14,7 @@ from sc2nachos.protocol import (
     ConnectionClosedError,
     ConnectionTimeoutError,
     GameEndedError,
+    GameNotStartedError,
     GamePorts,
     PortPair,
     ProtocolError,
@@ -72,8 +73,13 @@ class TestErrors:
         with pytest.raises(GameEndedError):
             client.ping()
 
+    def test_a_game_that_has_not_started_raises_its_own_error(self) -> None:
+        client, _ = make_client(make_response(Status.LAUNCHED, error=["A game has not been started yet"]))
+        with pytest.raises(GameNotStartedError):
+            client.observation()
+
     def test_every_failure_is_a_protocol_error(self) -> None:
-        for error in (GameEndedError, ConnectionClosedError, ConnectionTimeoutError):
+        for error in (GameEndedError, GameNotStartedError, ConnectionClosedError, ConnectionTimeoutError):
             assert issubclass(error, ProtocolError)
 
     def test_an_answer_to_a_different_question_names_both(self) -> None:
@@ -193,6 +199,19 @@ class TestRequests:
 
         Client(ClosedTransport()).quit()
 
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            make_response(Status.LAUNCHED, error=["A game has not been started yet"]),
+            make_response(Status.ENDED, error=["Game has already ended"]),
+        ],
+        ids=["never started", "already over"],
+    )
+    def test_leaving_a_game_that_is_not_being_played_does_nothing(self, answer: sc2api_pb2.Response) -> None:
+        client, transport = make_client(answer)
+        client.leave_game()
+        assert transport.requests[0].HasField("leave_game")
+
     def test_closing_the_client_releases_the_transport(self) -> None:
         client, transport = make_client()
         client.close()
@@ -222,8 +241,13 @@ class TestWebSocketTransport:
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
     def test_a_game_that_never_answers_raises_a_timeout(self) -> None:
-        websocket = FakeWebSocket(timeout=True)
+        websocket = FakeWebSocket(failure=WebSocketTimeoutException("timed out"))
         with pytest.raises(ConnectionTimeoutError):
+            self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+
+    def test_a_game_that_died_is_a_closed_connection(self) -> None:
+        websocket = FakeWebSocket(failure=ConnectionResetError(10054, "An existing connection was forcibly closed"))
+        with pytest.raises(ConnectionClosedError, match="forcibly closed"):
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
     def test_a_text_frame_is_not_a_response(self) -> None:

@@ -4,7 +4,7 @@ from collections import deque
 from typing import Any
 
 from s2clientprotocol import sc2api_pb2
-from websocket import WebSocketConnectionClosedException, WebSocketTimeoutException
+from websocket import WebSocketConnectionClosedException
 
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client, Status
@@ -29,13 +29,13 @@ class FakeTransport:
 
 
 class FakeWebSocket:
-    """The three methods `WebSocketTransport` uses, over a prepared queue of payloads."""
+    """The three methods `WebSocketTransport` uses, over a prepared queue of payloads or a `failure` to raise."""
 
-    def __init__(self, *payloads: str | bytes, timeout: bool = False) -> None:
+    def __init__(self, *payloads: str | bytes, failure: Exception | None = None) -> None:
         self.sent: list[bytes] = []
         self.closed = False
         self._payloads: deque[str | bytes] = deque(payloads)
-        self._timeout = timeout
+        self._failure = failure
 
     def send_binary(self, payload: bytes) -> int:
         if self.closed:
@@ -44,8 +44,8 @@ class FakeWebSocket:
         return len(payload)
 
     def recv(self) -> str | bytes:
-        if self._timeout:
-            raise WebSocketTimeoutException("timed out")
+        if self._failure is not None:
+            raise self._failure
         if not self._payloads:
             raise WebSocketConnectionClosedException("Connection to remote host was lost.")
         return self._payloads.popleft()
