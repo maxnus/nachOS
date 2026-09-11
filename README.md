@@ -56,6 +56,11 @@ handlers as your modules load. Connecting happens later, in the runner:
 run_local("PylonAIE", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.VERY_HARD))
 ```
 
+## Coming from python-sc2
+
+NachOS is not a drop-in replacement. [Migrating from python-sc2](docs/migrating-from-python-sc2.md) lists the
+places where the obvious translation goes wrong.
+
 ## Requirements
 
 Python 3.12+ and a StarCraft II installation.
