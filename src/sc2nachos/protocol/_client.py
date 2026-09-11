@@ -104,7 +104,8 @@ class Client:
     ) -> None:
         """Set up a match on `map_path` for `players`, which each participant then joins.
 
-        Only the client that creates the game sends this; on a ladder the game already exists.
+        Only the client that creates the game sends this; on a ladder the game already exists. At least one player
+        must be a participant, and the game seats only as many as the map has slots, dropping the rest unrefused.
         """
         self._forget_game()
         request = sc2api_pb2.RequestCreateGame(

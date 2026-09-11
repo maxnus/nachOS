@@ -6,10 +6,10 @@ their members is defined in terms of a raw member so that no game id is ever wri
 
 Regenerate after a patch changes stableid.json::
 
-    python tools/generate_ids.py
+    uv run python tools/generate_ids.py
 
-Vendoring stableid.json means this runs without StarCraft II installed; refresh it from the game
-(`~/Documents/StarCraft II/stableid.json` on Windows) when a patch lands.
+Vendoring stableid.json means this runs without StarCraft II installed. The game rewrites the file from whichever
+map it last loaded, so refresh it from a current ladder map, as `docs/curating-ids.md` says.
 """
 
 import json

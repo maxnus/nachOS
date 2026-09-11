@@ -7,7 +7,8 @@
 [AvocaDOS](https://github.com/maxnus/AvocaDOS), and is intended to be published for other bot authors.
 
 The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
-`docs/plans/nachOS-initial-prompt.md`.
+`docs/plans/nachOS-initial-prompt.md`. How to decide which game ids are real, and to refresh them after a patch,
+is in `docs/curating-ids.md`.
 
 ## Python
 
@@ -19,9 +20,9 @@ next to this repository.
 `encoding="utf-8"` to both, or an em dash written back to a source file silently becomes invalid UTF-8
 and ruff refuses to read it.
 
-**A `Final` dataclass field can only be set by the generated `__init__`.** It is an ordinary field at runtime,
-`slots=True` included, and pyright rejects any later assignment -- in `__post_init__` too. So a field that is
-fetched rather than passed in comes from a classmethod that calls the constructor, as `_Game.start` does.
+**A `Final` dataclass field can only be set by the generated `__init__`**, and pyright rejects any later
+assignment, in `__post_init__` too. A field that is fetched rather than passed in comes from a classmethod that
+calls the constructor, as `_Game.start` does.
 
 ## Core design rules
 
@@ -33,9 +34,7 @@ These are the non-negotiables. They exist because this library is published for 
 - **The API is instantiated, never subclassed.** Do not document, encourage or design for bot authors inheriting
   from `Api`, and never add a mixin or extension hook for them to hang helpers on. Their helpers belong in
   their own modules as ordinary functions. A felt need to subclass is a signal that NachOS is missing an API —
-  treat it as a bug report against this library, not as a pattern to support. (AvocaDOS subclasses during the
-  migration only because of its legacy `ApiExtensions` mixin. That is a wart being dissolved, not the intended
-  shape.)
+  treat it as a bug report against this library, not as a pattern to support.
 - **`Api.__init__` must be cheap and must not require a live connection.** Consumers construct it at import
   time so that `@api.event.on(...)` decorators can run as their modules load. Connecting happens in
   `run_local` / `run_ladder`, which take an already-built instance.
@@ -81,6 +80,9 @@ Carried over from AvocaDOS, so the two codebases read alike:
   `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
   layer keeps Blizzard's `game_loop`, because the messages it hands back carry that field, and `Api.play` is
   the one place the two meet. Never write "frame" for either.
+- **Where a finding goes**: a rule that shapes code not yet written goes here, in a line or two. A fact about one
+  piece of code goes beside that code, in its docstring or a comment. The evidence goes in the commit message or
+  PR, and the steps for one kind of task in `docs/`.
 
 ## Review checklist
 
@@ -88,7 +90,7 @@ Each of these came from a real bug found in review, mostly in code that looked c
 
 - **Annotate as tightly as the value allows.** `Self` for type-preserving operations, exact tuple arity
   (`tuple[float, float]`, not `tuple[float, ...]`), fixed-length returns where the count is in the name, real
-  protobuf types under `TYPE_CHECKING`. `pyright` runs in CI and has caught what `ruff` and the tests did not.
+  protobuf types under `TYPE_CHECKING`.
 - **No false IS-A.** Types of different shape must not inherit from each other — `Point3` is not a `Point2`, a
   `Rect` is not a point. Share behavior through a non-public base instead. A subtype claim that is not
   substitutable makes every downstream bug typecheck cleanly.
@@ -104,123 +106,39 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **Every exported name is a promise.** No public API without a caller or a test that shows why it exists, and no
   second spelling of an operation that already exists.
 - **Measure before claiming.** Benchmark competing shapes rather than reasoning about them; grep for real call
-  sites before calling something hot. Several "obvious" optimizations in review turned out to target the wrong
-  cost entirely.
+  sites before calling something hot.
 - **A name must not claim behavior the code lacks.** The most common defect found in review, and the one tests
-  never catch. `rescale` was a plain `lerp`; `exp_decay` was a linear blend that mixed seconds with game steps;
-  `Region` was a set of discrete tiles; `Area.size` meant area for two shapes and a point count for the third;
-  `Point.floored` returned a tile corner wearing a position's type. Read the body, then ask what the name
-  promised.
+  never catch: `rescale` was a plain `lerp`, and `Area.size` meant area for two shapes and a point count for the
+  third. Read the body, then ask what the name promised.
 - **Test invariants across implementations, not one at a time.** `closest_point_to` returned a tile center from
-  `TileSet` and a boundary point from `Tile` and `Rectangle`, so one square of ground answered three ways — and
-  `TileSet`'s distance did not match the point it returned. Every per-class test passed. Parametrize one probe
-  over every implementation of the interface.
-- **A base class without `__slots__` gives every subclass a `__dict__`.** `Area` omitted it, so `Tile`'s
-  `__slots__ = ()` and `Rectangle`'s `slots=True` were both inert: wasted bytes on thousands of instances, and
-  arbitrary attributes assignable on a frozen value. `functools.cached_property` needs that dict, so a class
-  wanting one opts back in by declaring no slots — it cannot have both, and it cannot override an abstract
-  `property`.
-- **Set iteration order depends on how the set was built.** Two `frozenset`s holding equal elements iterate
-  differently when one was reached by `difference`. That reached `random_point`, making a seeded game
-  unreproducible. Anything that picks or orders elements must sort first.
-- **An unset proto2 enum field reads as its first declared value, not zero.** `Response.status` unset is
-  `launched`; `ResponseJoinGame.error` and `ResponseCreateGame.error` unset are `MissingParticipation` and
-  `MissingMap`, both truthy, so reading either blind refuses every successful request. Gate optional enum reads
-  with `HasField`, spelled out at the call site -- the stubs type it with a `Literal` of field names, so a helper
-  taking `field: str` defeats the check.
-- **`isinstance` against an ABC subclass costs ~6x a plain class when it misses** — ~125 ns against ~20. A
-  dispatch chain over `Area` implementations pays that per branch it rejects. Prefer a virtual method; a type
-  switch is both slower and closed to new shapes.
-- **Reading a field out of a protobuf message costs over ten times a slot read** — `observation.observation.game_loop`
-  took ~180 ns against ~13 for the same int in a slotted dataclass (protobuf 7.36 on upb, Python 3.12). A value
-  read many times a turn is copied out once, when the observation arrives.
-
-## Checking what the game contains
-
-Curation decides which ids are real, so "does this still exist?" comes up constantly. Answer it from these:
-
-- **Liquipedia** is the source of record for units, abilities and upgrades, and it dates removals -- a page's
-  `Removed Upgrades` section names the patch that took one out. The page URL returns HTTP 403 to automated
-  fetches, so read the wikitext through the API instead:
-  `https://liquipedia.net/starcraft2/api.php?action=parse&page=Raven_(Legacy_of_the_Void)&prop=wikitext&format=json`
-- **What a live structure offers** is the only direct evidence that an upgrade is researchable:
-  `query_available_abilities` on a debug-created structure. An armory offers vehicle weapons, ship weapons and
-  vehicle and ship plating, and nothing else -- vehicle plating and ship plating are dead halves of a 2012 merge.
-- **A price is not evidence.** Dead upgrades keep theirs: vehicle plating still answers ability 852 at 100/100
-  after fourteen years. Only an entry with no ability, no cost and no research time at all (Enhanced Shockwaves)
-  is caught from `RequestData` alone.
-- **`friendlyname` in `stableid.json`** carries what an ability is called -- `Research BattlecruiserWeaponRefit`
-  named the upgrade that became `YAMATO_CANNON`.
-
-**`data/stableid.json` is map-dependent.** SC2 rewrites it on every launch from the loaded map's mod
-dependencies, so the map decides the file: BerlingradAIE (2022) yields 4652 abilities against MagannathaAIE's
-4134, with 518 ids present only in the old map and a couple of dozen shared names shifted by +312 or +316.
-Refresh it from a current ladder map, never from whatever happened to be loaded last.
+  `TileSet` and a boundary point from `Tile` and `Rectangle`, and every per-class test passed. Parametrize one
+  probe over every implementation of the interface.
+- **A base class without `__slots__` gives every subclass a `__dict__`**, which makes their own slots inert and
+  lets attributes be set on a frozen value. `functools.cached_property` needs that dict, so a class wanting one
+  declares no slots, and a `cached_property` cannot override an abstract `property`.
+- **Anything that picks or orders the elements of a set must sort them first.** Two equal `frozenset`s can
+  iterate in different orders, depending on how each was built, which made a seeded game unreproducible.
+- **An unset proto2 enum field reads as its first declared value, not zero.** `ResponseJoinGame.error` unset is
+  `MissingParticipation`, which is truthy, so reading it blind refuses every successful join. Gate optional enum
+  reads with `HasField`, spelled out at the call site: the stubs type its argument as a `Literal` of field names,
+  which a helper taking `field: str` defeats.
+- **`isinstance` against an ABC costs ~6x a plain class when it misses**, so a type switch over `Area`
+  implementations pays that for every branch it rejects. Prefer a virtual method, which is also open to new shapes.
+- **Reading a field out of a protobuf message costs over ten times a slot read.** A value read many times a turn
+  is copied out once, when the observation arrives.
 
 ## Talking to the game
 
 - **The authoritative protocol documentation is the comments in `sc2api.proto`**, and the `s2clientprotocol`
   package on PyPI ships only generated code, which carries none of them. Read the source:
   `https://raw.githubusercontent.com/Blizzard/s2client-proto/master/s2clientprotocol/sc2api.proto`
-- **A participant's race and name come from the join, not from the create.** `PlayerSetup.race` is used only for
-  a computer player, as its proto comment says: a game created with a bare `Participant` and joined as Terran
-  reports `race_actual` Terran, and `race_actual` is populated only for your own player.
-- **`ResponseGameInfo` never changes during a game.** Byte-identical at game loops 0, 256, 1024 and 3008 on
-  the same match. python-sc2 re-asks for it on every single step, which is 77 KB a step for a message that holds
-  the map, its terrain and who is playing. Ask once, at the start.
-- **`ResponseData` changes with upgrades, and only with them.** Byte-identical across 2000 steps without one.
-  After a debug `upgrade` left the player holding 55 upgrades, 131 of 2005 unit types had changed their
-  `weapons`, `armor` and `movement_speed` -- a Marine went from 6 damage and 0 armor to 7 and 1 -- while the
-  abilities, upgrades, buffs and effects had not. A unit type has one entry and no player, so once anyone has
-  upgraded the tables cannot be right for both sides. Asked at the start of a game, before any upgrade, they
-  are the base values both sides share. burnysc2 asks only then (`sc2/main.py:122`) and applies upgrades from
-  hand-written tables in `sc2/constants.py` (`DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, ...), using the
-  `attack_upgrade_level` and `armor_upgrade_level` on each unit. `raw.proto` lists those among the fields it
-  fills for every alliance, above its "Not populated for enemies" section, and the corpus bears it out: every
-  visible enemy unit carries `armor_upgrade_level` and `shield_upgrade_level`, every armed one
-  `attack_upgrade_level` (widow mines, infestors and overseers have none), and the levels rise on zerglings,
-  stalkers, marines and hellbats some nine minutes in. The one cloaked unit seen undetected, an observer, carried
-  none of the three.
-- **One connection can play game after game.** `sc2api.proto` describes `ended` as "ready for a new game", and
-  a client that left a game on Pylon went on to create and join one on Torches. Anything held because it does
-  not change during a game is held per game, never per connection.
-- **A game seats as many players as its map has slots, and drops the rest without a word.** On PylonAIE a
-  bot with two or with three computers was created and joined as a two-player game, `game_info` listing two
-  players, and nothing was refused. `PlayerSetup` has no team field, so teams cannot be set either. A bot alone
-  on a map plays; computers without a participant are refused ("There must be at least one participant or
-  observer").
-- **A recorded game is enormous raw and tiny compressed.** A full bare game is 771 exchanges and 63 MB, of
-  which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
-  default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one
-  observation. xz is also the fastest to read back here, since most of the output is long match copies.
-- **A recording is whole only once it is closed.** xz holds back what it has not yet written out, and Python's
-  `lzma` cannot flush mid-stream. A run killed after 10 exchanges left an empty file, after 200 left 96
-  readable, and after 1000 left 930. Reading one back ends in `EOFError`, which `Recording` turns into a
-  `ProtocolError`.
-- **A game against the computer says it is over on the observation that carries the results.** The step before
-  it still answers `in_game`. Once over, `step` and `action` are refused with `Game has already ended`, while
-  `observation` goes on answering with the results. Nothing in the protocol stops a step being the first to say
-  `ended`, so a runner has to follow any end with an observation before it can say who won.
-- **Leaving is refused whenever there is no game to leave**: before one is created, after a `create_game` the
-  game refused, between create and join, and after having already left. Each answers
-  `A game has not been started yet`, which a cleanup path has to forgive or it will hide the error that got it
-  there. Leaving from `in_game` or `ended` is accepted and returns the client to `launched`.
-- **The game serves one connection at a time.** While one is open, the next is dropped during the websocket
-  handshake, which websocket-client raises as its own `WebSocketConnectionClosedException`, so opening a
-  connection needs translating as much as a request does. Once the first
-  closes, the next finds whatever it left: a game created on one connection is joined from the next, which is how
-  a ladder that creates the match hands it to a bot.
-- **A ladder's start port means the same to NachOS and python-sc2.** With a client each and the match created
-  on NachOS's, NachOS and a python-sc2 bot joining the way its ladder script does, both given the same start
-  port, played in lockstep. When NachOS left two minutes in, the python-sc2 bot was told it had won.
-- **A game that is killed makes websocket-client raise a bare `ConnectionResetError`** (WinError 10054), not
-  one of its own `WebSocketException`s, so a transport has to translate the OS error too.
-- **Map packs install alongside the maps they replace**, so one map name really does match several files --
-  `MagannathaAIE_v2.SC2Map` sits in both `Maps/` and `Maps/AIE/`. A lookup by name must resolve that rather than
-  refuse it.
-- **Some units the game reports are effects.** A sentry's force field arrives as a neutral `ForceField` unit
-  and a reaper's grenade as a `KD8Charge`. burnysc2 turns both, and the parasitic bomb's dummy, into effects
-  (`FakeEffectID` in `sc2/constants.py`).
+- **One connection can play game after game**, so anything held because it does not change during a game is held
+  per game, never per connection.
+- **`ResponseGameInfo` never changes during a game.** Ask once, at the start; python-sc2 asks on every step.
+- **`ResponseData` changes with the asking player's upgrades, and only with them**, though a unit type has one
+  entry and no player. Asked at the start, before any upgrade, it holds the base values both sides share. Each
+  unit reports its own upgrade levels, visible enemies' included.
+- **`race_actual` in `ResponseGameInfo` is filled only for your own player.**
 
 ## Testing
 
@@ -241,5 +159,5 @@ them workers mining, and since nothing leaves its base it shows the computer's a
 | Run the tests that start a game | `uv run pytest -m integration` |
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
 | Type check | `uv run pyright` |
-| Regenerate raw ids | `uv run python tools/generate_ids.py` after refreshing `data/stableid.json` |
+| Regenerate raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as `docs/curating-ids.md` says |
 | Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
