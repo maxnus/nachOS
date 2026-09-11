@@ -175,13 +175,16 @@ class TestPlaying:
         )
         assert Api().play(client) is Result.UNDECIDED
 
-    def test_an_api_plays_one_game(self) -> None:
-        api = Api(step_size=2)
-        api.play(_joined(*_game(0, 2))[0])
-        client, transport = _joined(*_game(0, 2))
-        with pytest.raises(RuntimeError, match="plays one game"):
-            api.play(client)
-        assert [request.WhichOneof("request") for request in transport.requests] == ["join_game"]
+    def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
+        """An api kept at module scope is handed every game its process plays."""
+        api = Api(step_size=4)
+        api.play(_joined(*_game(0, 4, 8, ending=Result.DEFEAT))[0])
+        client, transport = _joined(*_game(0, 4, stepped=False))
+        assert api.play(client, realtime=True) is Result.VICTORY
+        assert api.turn == 1
+        assert api.client is client
+        asked = [request.observation.game_loop for request in transport.requests if request.HasField("observation")]
+        assert asked == [0, 4]
 
 
 class TestRunningLocally:
