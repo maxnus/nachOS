@@ -69,6 +69,10 @@ Carried over from AvocaDOS, so the two codebases read alike:
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
 - **`TYPE_CHECKING` guard** for imports that would otherwise be circular.
 - **loguru**, not stdlib `logging`.
+- **Errors**: a failure of the library's own raises a subclass of `NachOSError`, which also subclasses the
+  built-in it is a case of, where one fits: `ConnectionClosedError` is a `ConnectionError`. Misuse, such as a bad
+  argument, raises the built-in (`ValueError`, `TypeError`, `IndexError`). A dependency's exception is translated
+  where it enters, with `raise ... from`, and never reaches the caller.
 - **US spelling** everywhere in code, comments, docstrings and docs — `behavior`, `initialize`, `summarize`,
   `color`, `center`. The exception is generated identifiers: `ids/raw/` mirrors Blizzard's own names verbatim
   (`BuildinProgressNonCancellable`), and those are data, never to be "corrected".

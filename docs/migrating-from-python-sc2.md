@@ -28,6 +28,13 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   `path`. A `Client` over `ReplayTransport(Recording(path))` then plays it back with no game running. A run that
   is killed before it finishes leaves only part of the file.
 
+## Errors
+
+- **Everything NachOS raises for a failure of its own is a `NachOSError`.** python-sc2's `ProtocolError` whose
+  `is_game_over_error` is true is `GameEndedError` here, and its `ConnectionAlreadyClosedError` is
+  `ConnectionClosedError`. Where a built-in fits, the error is one too: `ConnectionClosedError` is a
+  `ConnectionError`, and `ConnectionTimeoutError` a `TimeoutError`.
+
 ## Time
 
 - **One game loop is one step.** `api.step` is python-sc2's `state.game_loop`, and `api.time` is its `time`.

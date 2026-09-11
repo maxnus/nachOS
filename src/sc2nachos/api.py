@@ -6,12 +6,13 @@ from typing import Final, Self
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
+from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client
 
 
-class NotPlayingError(Exception):
+class NotPlayingError(NachOSError, RuntimeError):
     """There is no game to answer from, because none has been joined."""
 
 

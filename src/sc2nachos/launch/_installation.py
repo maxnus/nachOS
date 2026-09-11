@@ -9,6 +9,8 @@ from typing import Self
 
 from loguru import logger
 
+from sc2nachos._errors import NachOSError
+
 # The oldest build that speaks the raw interface this library is built on.
 MINIMUM_BASE_BUILD = 55958
 
@@ -16,15 +18,15 @@ _VERSIONS = "Versions"
 _BASE_PREFIX = "Base"
 
 
-class UnsupportedPlatformError(Exception):
+class UnsupportedPlatformError(NachOSError):
     """StarCraft II does not run on the platform asked for."""
 
 
-class InstallationNotFoundError(Exception):
+class InstallationNotFoundError(NachOSError):
     """StarCraft II is not installed where this platform keeps it, and `SC2PATH` does not say otherwise."""
 
 
-class GameVersionError(Exception):
+class GameVersionError(NachOSError):
     """The installation holds no version this library can drive."""
 
 
