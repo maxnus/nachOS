@@ -39,7 +39,10 @@ class GameMap:
     """Where a structure can go as the game starts. Rocks block it, but no resource or townhall does."""
 
     height: Grid[float]
-    """The height of the ground, in the units of a unit's `z` and in steps of 32/255, about an eighth."""
+    """The height of the ground at each tile's lower left corner, in the units of a unit's `z`, in eighths.
+
+    Units on flat ground stand within 0.15 of it. On a ramp, the rest of a tile can be up to 0.41 higher or lower
+    than its corner, and beside a cliff the corner can be on the other level."""
 
     opponent_start_locations: tuple[Point, ...]
     """Where the opponent may have started: every start location on the map but this player's own."""
@@ -50,8 +53,8 @@ class GameMap:
         start = info.start_raw
         playable_area = Rectangle.from_proto(start.playable_area)
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
-        # A byte of height spans -16 to 16.
-        height = -16.0 + 32.0 * _pixels(start.terrain_height, playable_area) / 255.0
+        # A byte is an eighth of a unit of height, and 127 is zero.
+        height = (_pixels(start.terrain_height, playable_area).astype(float) - 127) / 8
         return cls(
             name=info.map_name,
             playable_area=playable_area,

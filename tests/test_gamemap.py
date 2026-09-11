@@ -42,11 +42,10 @@ class TestReadingAMap:
         with pytest.raises(IndexError, match="lies outside"):
             _ = game_map.height[Tile(0, 0)]
 
-    def test_the_height_is_in_the_units_of_a_unit_z(self) -> None:
-        game_map = GameMap.from_proto(make_game_info("###", heights=make_bytes([0, 51, 255])))
-        assert game_map.height[Tile(0, 0)] == -16.0
-        assert game_map.height[Tile(1, 0)] == pytest.approx(-9.6)
-        assert game_map.height[Tile(2, 0)] == 16.0
+    def test_a_byte_of_height_is_an_eighth_with_127_at_zero(self) -> None:
+        # 191, 207, 223 and 239 are the levels units stand on, at 8, 10, 12 and 14.
+        game_map = GameMap.from_proto(make_game_info("#" * 7, heights=make_bytes([0, 127, 191, 207, 223, 239, 255])))
+        assert [game_map.height[Tile(x, 0)] for x in range(7)] == [-15.875, 0.0, 8.0, 10.0, 12.0, 14.0, 16.0]
 
     def test_the_grids_refuse_writes_but_a_copy_does_not(self) -> None:
         game_map = GameMap.from_proto(make_game_info())
@@ -95,13 +94,16 @@ def _own_townhall(observation: sc2api_pb2.Observation) -> Point:
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 class TestARecordedMap:
-    def test_every_unit_on_the_ground_stands_at_the_height_of_the_ground(self, path: Path) -> None:
+    def test_every_unit_on_flat_ground_stands_at_its_height(self, path: Path) -> None:
         info, observation = _start(path)
         game_map = GameMap.from_proto(info)
         for unit in observation.raw_data.units:
-            if not unit.is_flying:
-                # Within a step of the byte it is stored in, and a little more on a slope.
-                assert game_map.height[Point((unit.pos.x, unit.pos.y))] == pytest.approx(unit.pos.z, abs=0.2)
+            tile = Tile(int(unit.pos.x), int(unit.pos.y))
+            corners = {game_map.height[Tile(tile.x + dx, tile.y + dy)] for dx in (0, 1) for dy in (0, 1)}
+            if not unit.is_flying and len(corners) == 1:
+                # Units stand up to a few hundredths below it, and the ground can sit a little above: Pylon's main
+                # base by 0.15.
+                assert -0.03 < unit.pos.z - game_map.height[tile] < 0.16
 
     def test_nothing_open_is_left_off_the_playable_area(self, path: Path) -> None:
         info, _ = _start(path)
