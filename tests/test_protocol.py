@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 from s2clientprotocol import error_pb2, raw_pb2, sc2api_pb2
-from websocket import WebSocket, WebSocketTimeoutException
+from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketException, WebSocketTimeoutException
 
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
@@ -295,6 +295,30 @@ class TestWebSocketTransport:
         websocket = FakeWebSocket()
         self._transport(websocket).close()
         assert websocket.closed
+
+    @staticmethod
+    def _refuse_to_open(monkeypatch: pytest.MonkeyPatch, failure: Exception) -> None:
+        def create_connection(url: str, **kwargs: object) -> WebSocket:
+            raise failure
+
+        monkeypatch.setattr("sc2nachos.protocol._websocket.create_connection", create_connection)
+
+    def test_a_connection_dropped_as_it_opens_is_one_another_connection_may_hold(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._refuse_to_open(monkeypatch, WebSocketConnectionClosedException("Connection to remote host was lost."))
+        with pytest.raises(ConnectionClosedError, match="another connection holds it"):
+            WebSocketTransport.connect("ws://127.0.0.1:5000/sc2api")
+
+    def test_a_game_that_never_opens_the_connection_raises_a_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._refuse_to_open(monkeypatch, WebSocketTimeoutException("timed out"))
+        with pytest.raises(ConnectionTimeoutError):
+            WebSocketTransport.connect("ws://127.0.0.1:5000/sc2api")
+
+    def test_any_other_failure_to_open_is_a_protocol_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._refuse_to_open(monkeypatch, WebSocketException("Invalid WebSocket Header"))
+        with pytest.raises(ProtocolError, match="Invalid WebSocket Header"):
+            WebSocketTransport.connect("ws://127.0.0.1:5000/sc2api")
 
 
 class TestGamePorts:

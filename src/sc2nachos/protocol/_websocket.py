@@ -29,7 +29,16 @@ class WebSocketTransport:
         `timeout` bounds every wait on the socket. It defaults to none, because loading a map takes as long as
         it takes and a bot has nothing to do in the meantime.
         """
-        websocket = create_connection(url, timeout=timeout)
+        try:
+            websocket = create_connection(url, timeout=timeout)
+        except WebSocketConnectionClosedException as error:
+            raise ConnectionClosedError(
+                f"the game at {url} dropped the connection as it opened, as it does while another connection holds it"
+            ) from error
+        except WebSocketTimeoutException as error:
+            raise ConnectionTimeoutError(f"the game at {url} did not answer in time") from error
+        except WebSocketException as error:
+            raise ProtocolError(f"the websocket to {url} failed to open: {error}") from error
         logger.info("Connected to the game at {}", url)
         return cls(websocket)
 

@@ -14,8 +14,9 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   and defaults to easy.
 - **A game holds one bot and at most one computer.** Every current map has two slots, and the game drops extra
   players without saying so. Two bots cannot share a process.
-- **`time_limit` calls the game a tie at the first turn at or past the limit.** python-sc2's `game_time_limit`
-  waits for the first turn strictly past it.
+- **`run_local`'s `time_limit` calls the game a tie at the first turn at or past the limit.** python-sc2's
+  `game_time_limit` waits for the first turn strictly past it. `run_ladder` takes no limit, because a bot ends a
+  game early only by leaving it, and leaving concedes it.
 - **A map name can resolve to a different file.** NachOS searches every folder under `Maps`. When several copies
   match, it takes the shallowest, and the first alphabetically among copies at the same depth. python-sc2 searches
   two levels deep and takes whichever match the filesystem lists first.

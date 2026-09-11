@@ -9,7 +9,15 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
-from sc2nachos.protocol import Client, ProtocolError, Recording, ReplayTransport, Status, WebSocketTransport
+from sc2nachos.protocol import (
+    Client,
+    ConnectionClosedError,
+    ProtocolError,
+    Recording,
+    ReplayTransport,
+    Status,
+    WebSocketTransport,
+)
 from support import FakeTransport, make_observation, make_response
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
@@ -341,6 +349,8 @@ class TestAgainstTheRealGame:
             # The ladder creates the match, then lets go of the client, which serves one connection at a time.
             with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
                 ladder.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_HARD)])
+                with pytest.raises(ConnectionClosedError, match="another connection holds it"):
+                    WebSocketTransport.connect(game.url)
 
             api = Api(steps_per_turn=16)
             result = run_ladder(ApiBot(api, Race.TERRAN, "NachOS"), host="127.0.0.1", port=port)

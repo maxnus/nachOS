@@ -62,19 +62,19 @@ def run_ladder(
     port: int,
     start_port: int | None = None,
     realtime: bool = False,
-    time_limit: float | None = None,
     record_to: Path | None = None,
 ) -> Result:
     """Join the game a ladder has already set up, and play it out.
 
     The ladder starts the client and creates the match, then hands the bot its address and `start_port` on the
     command line. A game against the built-in computer has no `start_port`, since nobody else is joining.
+    There is no time limit: the only way a bot can end a game early is to leave it, which concedes it.
     """
     with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
             ports = GamePorts.from_start_port(start_port) if start_port is not None else None
             client.join_game(bot.race, name=bot.name, ports=ports)
-            return bot.api.play(client, realtime=realtime, time_limit=time_limit)
+            return bot.api.play(client, realtime=realtime)
         finally:
             # The ladder owns the client it started, so it is left running to be told what to do next.
             client.leave_game()
