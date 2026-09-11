@@ -120,6 +120,40 @@ class TestJoining:
             client.join_game(Race.PROTOSS)
 
 
+class TestGameAfterGame:
+    """One connection can play game after game, so nothing of one game may answer for the next."""
+
+    def _won(self, *after: sc2api_pb2.Response) -> Client:
+        """A client whose game has ended in a victory, over a transport that will then answer `after`."""
+        client, _ = make_client(
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+            make_response(Status.ENDED, observation=make_observation(100, (1, Result.VICTORY))),
+            *after,
+        )
+        client.join_game(Race.TERRAN)
+        client.observation()
+        assert client.result is Result.VICTORY
+        return client
+
+    def test_leaving_forgets_the_game(self) -> None:
+        client = self._won(make_response(Status.LAUNCHED))
+        client.leave_game()
+        assert (client.player_id, client.result, dict(client.results)) == (None, None, {})
+
+    def test_creating_the_next_game_forgets_the_last(self) -> None:
+        """A game that has ended is ready for a new one without being left first."""
+        client = self._won(make_response(Status.INIT_GAME, create_game=sc2api_pb2.ResponseCreateGame()))
+        client.create_game("Next.SC2Map", [Participant(), Participant()])
+        assert (client.player_id, client.result) == (None, None)
+
+    def test_a_refused_join_leaves_nothing_of_the_last_game(self) -> None:
+        refused = sc2api_pb2.ResponseJoinGame(error=sc2api_pb2.ResponseJoinGame.MissingParticipation)
+        client = self._won(make_response(Status.ENDED, join_game=refused))
+        with pytest.raises(ProtocolError, match="MissingParticipation"):
+            client.join_game(Race.TERRAN)
+        assert (client.player_id, client.result) == (None, None)
+
+
 class TestObservation:
     def test_a_running_game_answers_in_one_request(self) -> None:
         client, transport = make_client(

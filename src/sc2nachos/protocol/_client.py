@@ -47,6 +47,9 @@ class Client:
     Every method is one request, and blocks until the game answers it. The protocol carries one request at
     a time with no way to match an answer to anything but the last question, so there is nothing to overlap.
 
+    One connection can play game after game. What the client keeps of a game, which is its own player and how
+    the game ended, lasts from the join until the game is left or the next one is set up.
+
     Nothing is interpreted here beyond what the protocol itself demands: the responses are the game's own
     messages, and turning them into a data model belongs above.
     """
@@ -103,6 +106,7 @@ class Client:
 
         Only the client that creates the game sends this; on a ladder the game already exists.
         """
+        self._forget_game()
         request = sc2api_pb2.RequestCreateGame(
             local_map=sc2api_pb2.LocalMap(map_path=str(map_path)),
             player_setup=[_player_setup(player) for player in players],
@@ -133,6 +137,7 @@ class Client:
 
         NachOS plays on the raw interface, so the rendered ones are never requested.
         """
+        self._forget_game()
         request = sc2api_pb2.RequestJoinGame(
             race=race.value,
             options=sc2api_pb2.InterfaceOptions(
@@ -161,7 +166,6 @@ class Client:
             detail = joined.error_details or "no detail given"
             raise ProtocolError(f"the game refused the join as {reason}: {detail}")
         self._player_id = joined.player_id
-        self._results = {}
         logger.info("Joined the game as player {} playing {}", joined.player_id, race)
         return joined.player_id
 
@@ -231,6 +235,7 @@ class Client:
         """
         with suppress(GameNotStartedError, GameEndedError, ConnectionClosedError):
             self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
+        self._forget_game()
 
     def quit(self) -> None:
         """Ask the game client to exit. A connection that has already gone is not an error here."""
@@ -240,6 +245,11 @@ class Client:
     def close(self) -> None:
         """Release the transport."""
         self._transport.close()
+
+    def _forget_game(self) -> None:
+        """Drop what the client kept of the last game, so none of it answers for the next."""
+        self._player_id = None
+        self._results = {}
 
     def _observe(self, game_loop: int | None) -> sc2api_pb2.ResponseObservation:
         request = sc2api_pb2.RequestObservation()

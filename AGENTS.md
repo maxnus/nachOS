@@ -164,7 +164,10 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
   `weapons`, `armor` and `movement_speed` -- a Marine went from 6 damage and 0 armor to 7 and 1 -- while the
   abilities, upgrades, buffs and effects had not. A unit type has one entry and no player, so once anyone has
   upgraded the tables cannot be right for both sides. Asked at the start of a game, before any upgrade, they
-  are the base values both sides share.
+  are the base values both sides share. burnysc2 asks only then (`sc2/main.py:122`) and applies upgrades from
+  hand-written tables in `sc2/constants.py` (`DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, ...), using the
+  `attack_upgrade_level` and `armor_upgrade_level` on each unit. `raw.proto` lists those among the fields it
+  fills for every alliance, above its "Not populated for enemies" section.
 - **One connection can play game after game.** `sc2api.proto` describes `ended` as "ready for a new game", and
   a client that left a game on Pylon went on to create and join one on Torches. Anything held because it does
   not change during a game is held per game, never per connection.
