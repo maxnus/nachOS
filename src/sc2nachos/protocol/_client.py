@@ -229,9 +229,9 @@ class Client:
         return response.save_replay.data
 
     def leave_game(self) -> None:
-        """Leave the game, which concedes it if it has not already ended.
+        """Leave the game, which concedes it if it has not already ended, and return the client to `launched`.
 
-        Leaving a game that never started, that is already over, or whose connection has gone does nothing.
+        Leaving when there is no game to leave, or no connection left, is not an error.
         """
         with suppress(GameNotStartedError, GameEndedError, ConnectionClosedError):
             self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))

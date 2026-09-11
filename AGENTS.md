@@ -200,7 +200,14 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **Leaving is refused whenever there is no game to leave**: before one is created, after a `create_game` the
   game refused, between create and join, and after having already left. Each answers
   `A game has not been started yet`, which a cleanup path has to forgive or it will hide the error that got it
-  there. Leaving from `in_game` is accepted and returns the client to `launched`.
+  there. Leaving from `in_game` or `ended` is accepted and returns the client to `launched`.
+- **The game serves one connection at a time.** While one is open, the next is dropped during the websocket
+  handshake, which websocket-client raises as its own `WebSocketConnectionClosedException`. Once the first
+  closes, the next finds whatever it left: a game created on one connection is joined from the next, which is how
+  a ladder that creates the match hands it to a bot.
+- **A ladder's start port means the same to NachOS and python-sc2.** With a client each and the match created
+  on NachOS's, NachOS and a python-sc2 bot joining the way its ladder script does, both given the same start
+  port, played in lockstep. When NachOS left at its time limit, the python-sc2 bot was told it had won.
 - **A game that is killed makes websocket-client raise a bare `ConnectionResetError`** (WinError 10054), not
   one of its own `WebSocketException`s, so a transport has to translate the OS error too.
 - **Map packs install alongside the maps they replace**, so one map name really does match several files --

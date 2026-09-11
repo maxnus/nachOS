@@ -1,12 +1,13 @@
 """The api and the two ways to run it, played out without a game wherever that is possible."""
 
+from contextlib import closing
 from pathlib import Path
 
 import pytest
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError
+from sc2nachos.launch import GameProcess, Map, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, ProtocolError, Recording, ReplayTransport, Status, WebSocketTransport
 from support import FakeTransport, make_observation, make_response
@@ -328,3 +329,24 @@ class TestAgainstTheRealGame:
         client.join_game(Race.TERRAN)
         assert replayed.play(client) is result
         assert replayed.step == api.step
+
+    def test_a_bare_api_plays_a_full_game_joined_as_on_a_ladder(self) -> None:
+        try:
+            game_map = Map.find(_LADDER_MAP)
+        except MapNotFoundError as missing:
+            pytest.skip(str(missing))
+
+        port = free_port()
+        with GameProcess.launch(port=port, window=(640, 480)) as game:
+            # The ladder creates the match, then lets go of the client, which serves one connection at a time.
+            with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
+                ladder.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_HARD)])
+
+            api = Api(steps_per_turn=16)
+            result = run_ladder(ApiBot(api, Race.TERRAN, "NachOS"), host="127.0.0.1", port=port)
+            assert result in (Result.VICTORY, Result.DEFEAT)
+            assert api.time > 60
+
+            with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
+                ladder.ping()
+                assert ladder.status is Status.LAUNCHED
