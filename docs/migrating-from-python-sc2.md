@@ -97,7 +97,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
 - **The grids refuse writes.** python-sc2 rebuilds the pathing grid every step, so writing into it lasted one
-  step. `copy()` a NachOS grid to change it.
+  step. A grid the map hands out is `readonly`, so a write raises `TypeError`; `copy()` gives one you can change.
 - **Height is the ground's height, not a byte, and python-sc2 decodes the byte a little low.** Its
   `terrain_height` holds the byte the game sends. Its `get_terrain_z_height` computes `-16 + 32 * byte / 255`,
   which reads up to 0.03 below where units stand. A byte is an eighth of a unit of height, with 127 at zero.

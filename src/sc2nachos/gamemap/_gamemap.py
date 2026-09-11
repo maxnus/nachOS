@@ -42,10 +42,10 @@ class GameMap:
         self._playable = playable
         walkable = _tile_values(start.pathing_grid, playable) != 0
         buildable = _tile_values(start.placement_grid, playable) != 0
-        self._pathing = Grid(_read_only(walkable), origin=origin, outside=False)
-        self._placement = Grid(_read_only(buildable), origin=origin, outside=False)
-        self._corners = _read_only(_tile_corners(_corner_heights(start.terrain_height, playable)))
-        self._height = Grid(_read_only(self._corners.mean(axis=-1)), origin=origin)
+        self._pathing = Grid(walkable, origin=origin, outside=False, readonly=True)
+        self._placement = Grid(buildable, origin=origin, outside=False, readonly=True)
+        self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
+        self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
         self._opponent_start_locations = tuple(Point.from_proto(location) for location in start.start_locations)
 
     @property
@@ -164,9 +164,3 @@ def _tile_corners(heights: ndarray) -> ndarray:
     own_side = numpy.where(upper, corners > below, corners <= below) | ~cliff[..., numpy.newaxis]
     side_height = (corners * own_side).sum(axis=-1) / own_side.sum(axis=-1)
     return numpy.where(own_side, corners, side_height[..., numpy.newaxis])
-
-
-def _read_only(values: ndarray) -> ndarray:
-    """`values`, which from now on refuse writes."""
-    values.flags.writeable = False
-    return values
