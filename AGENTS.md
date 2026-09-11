@@ -11,7 +11,9 @@ The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, wi
 
 ## Python
 
-Use the AvocaDOS virtual environment: `../AvocaDOS/.venv/Scripts/python.exe`. Never system Python.
+Use this repository's own environment, `.venv`, which `uv sync --extra dev` creates, and run every tool
+through `uv run`, as CI does. Never system Python, and never assume anything about what else is checked out
+next to this repository.
 
 **`Path.read_text` and `Path.write_text` default to the locale encoding here, which is cp1252.** Pass
 `encoding="utf-8"` to both, or an em dash written back to a source file silently becomes invalid UTF-8
@@ -183,8 +185,9 @@ protobuf fixtures via the fixture transport.
 
 | Task | Command |
 |---|---|
-| Run tests | `pytest` |
-| Run the tests that start a game | `pytest -m integration` |
-| Lint | `ruff check .` and `ruff format --check .` |
-| Type check | `pyright` (locally: `--pythonpath ../AvocaDOS/.venv/Scripts/python.exe`) |
-| Regenerate raw ids | `python tools/generate_ids.py` after refreshing `data/stableid.json` |
+| Set up | `uv sync --extra dev` |
+| Run tests | `uv run pytest` |
+| Run the tests that start a game | `uv run pytest -m integration` |
+| Lint | `uv run ruff check .` and `uv run ruff format --check .` |
+| Type check | `uv run pyright` |
+| Regenerate raw ids | `uv run python tools/generate_ids.py` after refreshing `data/stableid.json` |
