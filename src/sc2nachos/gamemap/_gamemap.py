@@ -40,9 +40,11 @@ class GameMap:
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
         self._name = info.map_name
         self._playable = playable
-        self._pathing = Grid(_read_only(_tiles(start.pathing_grid, playable) != 0), origin=origin, outside=False)
-        self._placement = Grid(_read_only(_tiles(start.placement_grid, playable) != 0), origin=origin, outside=False)
-        self._corners = _read_only(_corners_by_tile(_corner_heights(start.terrain_height, playable)))
+        walkable = _tile_values(start.pathing_grid, playable) != 0
+        buildable = _tile_values(start.placement_grid, playable) != 0
+        self._pathing = Grid(_read_only(walkable), origin=origin, outside=False)
+        self._placement = Grid(_read_only(buildable), origin=origin, outside=False)
+        self._corners = _read_only(_tile_corners(_corner_heights(start.terrain_height, playable)))
         self._height = Grid(_read_only(self._corners.mean(axis=-1)), origin=origin)
         self._opponent_start_locations = tuple(Point.from_proto(location) for location in start.start_locations)
 
@@ -107,7 +109,7 @@ class GameMap:
         return self._opponent_start_locations
 
 
-def _image(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
+def _pixels(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
     """The whole of `image`, indexed `[x, y]`, once it is known to be as large as it says and to cover `area`."""
     width, height, bits = image.size.x, image.size.y, image.bits_per_pixel
     if bits not in (1, 8) or len(image.data) != math.ceil(width * height * bits / 8):
@@ -121,10 +123,10 @@ def _image(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
     return pixels.reshape(height, width).T
 
 
-def _tiles(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
-    """The pixels of `image` over the tiles of `area`."""
+def _tile_values(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
+    """What `image` says about each tile of `area`, one pixel to a tile."""
     xs, ys = area.tile_range()
-    return numpy.ascontiguousarray(_image(image, area)[xs.start : xs.stop, ys.start : ys.stop])
+    return numpy.ascontiguousarray(_pixels(image, area)[xs.start : xs.stop, ys.start : ys.stop])
 
 
 def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
@@ -134,14 +136,14 @@ def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
     with 127 at zero.
     """
     xs, ys = area.tile_range()
-    corners = _image(image, area)[xs.start : xs.stop + 1, ys.start : ys.stop + 1]
+    corners = _pixels(image, area)[xs.start : xs.stop + 1, ys.start : ys.stop + 1]
     # An area reaching the far edge of the image has no corners past it, so the edge's own stand in for them.
     missing = (len(xs) + 1 - corners.shape[0], len(ys) + 1 - corners.shape[1])
     corners = numpy.pad(corners, ((0, missing[0]), (0, missing[1])), mode="edge")
     return (corners.astype(float) - 127) / 8
 
 
-def _corners_by_tile(heights: ndarray) -> ndarray:
+def _tile_corners(heights: ndarray) -> ndarray:
     """The heights of each tile's lower left, lower right, upper left and upper right corners, as the tile stands.
 
     A corner on a cliff line has one height, which is the wrong level for the tiles on its other side. A tile
