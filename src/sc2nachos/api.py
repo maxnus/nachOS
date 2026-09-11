@@ -8,6 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
+from sc2nachos.gamemap import GameMap
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client
 
@@ -21,7 +22,7 @@ class _Game:
     """One game as it is played: the client it is played on, and everything seen of it so far."""
 
     client: Final[Client]
-    info: Final[sc2api_pb2.ResponseGameInfo]
+    map: Final[GameMap]
     # The tables as they stood before any upgrade, which both sides share. Asked again later they fold in this
     # player's upgrades, and with one entry per unit type they would hand those to the enemy's units too.
     data: Final[sc2api_pb2.ResponseData]
@@ -35,7 +36,7 @@ class _Game:
         """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
-        return cls(client, info, data, observation, _step(observation))
+        return cls(client, GameMap.from_proto(info), data, observation, _step(observation))
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
@@ -90,19 +91,26 @@ class Api:
         """How many steps pass between one turn and the next."""
         return self._steps_per_turn
 
+    def _playing(self) -> _Game:
+        """The game being played, or the one played last."""
+        if self._game is None:
+            raise NotPlayingError("no game has been joined")
+        return self._game
+
     @property
     def client(self) -> Client:
         """The client the game is played on."""
-        if self._game is None:
-            raise NotPlayingError("no game has been joined")
-        return self._game.client
+        return self._playing().client
+
+    @property
+    def map(self) -> GameMap:
+        """The map the game is played on."""
+        return self._playing().map
 
     @property
     def step(self) -> int:
         """The step the game had reached when it was last observed."""
-        if self._game is None:
-            raise NotPlayingError("no game has been joined")
-        return self._game.step
+        return self._playing().step
 
     @property
     def time(self) -> float:
@@ -112,9 +120,7 @@ class Api:
     @property
     def result(self) -> Result | None:
         """How the game ended for this player, or `None` while it is still being played."""
-        if self._game is None:
-            raise NotPlayingError("no game has been joined")
-        return self._game.result
+        return self._playing().result
 
     def play(self, client: Client, *, realtime: bool = False, time_limit: float | None = None) -> Result:
         """Play the game `client` has already joined to its end, and return how it ended for this player.
@@ -126,7 +132,7 @@ class Api:
         """
         game = _Game.start(client)
         self._game = game
-        logger.info("Playing {} at {} steps a turn", game.info.map_name, self._steps_per_turn)
+        logger.info("Playing {} at {} steps a turn", game.map.name, self._steps_per_turn)
 
         while (result := game.outcome()) is None:
             if time_limit is not None and self.time >= time_limit:

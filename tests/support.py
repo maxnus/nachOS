@@ -3,7 +3,8 @@
 from collections import deque
 from typing import Any
 
-from s2clientprotocol import sc2api_pb2
+import numpy
+from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 from websocket import WebSocketConnectionClosedException
 
 from sc2nachos.match import Result
@@ -60,6 +61,46 @@ def make_response(status: Status | None = Status.IN_GAME, **fields: Any) -> sc2a
     if status is not None:
         response.status = status.value
     return response
+
+
+def make_bits(*rows: str) -> common_pb2.ImageData:
+    """A one-bit image drawn as rows of `#` and `.`, the top row first, the way the map would look."""
+    bits = [char == "#" for row in reversed(rows) for char in row]
+    size = common_pb2.Size2DI(x=len(rows[0]), y=len(rows))
+    return common_pb2.ImageData(bits_per_pixel=1, size=size, data=numpy.packbits(bits).tobytes())
+
+
+def make_bytes(*rows: list[int]) -> common_pb2.ImageData:
+    """A one-byte image of `rows` of values, the top row first, the way the map would look."""
+    data = bytes(value for row in reversed(rows) for value in row)
+    return common_pb2.ImageData(bits_per_pixel=8, size=common_pb2.Size2DI(x=len(rows[0]), y=len(rows)), data=data)
+
+
+def make_game_info(
+    *rows: str,
+    playable: tuple[int, int, int, int] | None = None,
+    heights: common_pb2.ImageData | None = None,
+    start_locations: tuple[tuple[float, float], ...] = (),
+) -> sc2api_pb2.ResponseGameInfo:
+    """A map drawn as rows of `#` for open ground and `.` for none, the top row first, or eight by eight of open.
+
+    The drawing is both the pathing and the placement grid. The map is playable from corner to corner unless
+    `playable` gives the corners `(x0, y0, x1, y1)` of a smaller area, and level unless `heights` says otherwise.
+    """
+    rows = rows or ("#" * 8,) * 8
+    width, height = len(rows[0]), len(rows)
+    x0, y0, x1, y1 = playable or (0, 0, width, height)
+    return sc2api_pb2.ResponseGameInfo(
+        map_name="Somewhere",
+        start_raw=raw_pb2.StartRaw(
+            map_size=common_pb2.Size2DI(x=width, y=height),
+            pathing_grid=make_bits(*rows),
+            placement_grid=make_bits(*rows),
+            terrain_height=heights or make_bytes(*([128] * width for _ in range(height))),
+            playable_area=common_pb2.RectangleI(p0=common_pb2.PointI(x=x0, y=y0), p1=common_pb2.PointI(x=x1, y=y1)),
+            start_locations=[common_pb2.Point2D(x=x, y=y) for x, y in start_locations],
+        ),
+    )
 
 
 def make_observation(game_loop: int = 0, *results: tuple[int, Result]) -> sc2api_pb2.ResponseObservation:

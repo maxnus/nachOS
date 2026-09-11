@@ -22,8 +22,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   two levels deep and takes whichever match the filesystem lists first.
 - **`run_ladder` takes the address and ports as arguments.** Reading `--LadderServer`, `--GamePort` and
   `--StartPort` from the ladder's command line is up to you.
-- **One api plays any number of games.** Each game starts from nothing. Before the first game, `api.client`,
-  `api.step`, `api.time` and `api.result` raise `NotPlayingError`.
+- **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
+  belongs to a game, such as `api.step` or `api.map`, raises `NotPlayingError`.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
   `path`. A `Client` over `ReplayTransport(Recording(path))` then plays it back with no game running. A run that
   is killed before it finishes leaves only part of the file.
@@ -82,3 +82,21 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **Grids are indexed `[x, y]`.** python-sc2's `PixelMap.data_numpy` is indexed `[y, x]`. `grid[point]` reads the
   tile that any point falls in, where a `PixelMap` needs whole-number coordinates. Reading past the edge raises
   `IndexError`, or returns the grid's `outside` value if it has one, instead of failing an assert.
+
+## The map
+
+| python-sc2 | NachOS |
+|---|---|
+| `game_info.map_name` | `api.map.name` |
+| `game_info.pathing_grid`, `in_pathing_grid(p)` | `api.map.pathing`, `api.map.pathing[p]` |
+| `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` |
+| `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height[p]` |
+| `game_info.map_center` | `api.map.playable_area.center` |
+| `enemy_start_locations` | `api.map.opponent_start_locations` |
+
+- **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
+  corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
+- **The grids refuse writes.** python-sc2 rebuilds the pathing grid every step, so writing into it lasted one
+  step. `copy()` a NachOS grid to change it.
+- **Height is the ground's height, not a byte.** python-sc2's `terrain_height` holds the byte the game sends, 0 to
+  255. `api.map.height` holds what `get_terrain_z_height` makes of it, which is in the units of a unit's `z`.
