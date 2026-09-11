@@ -187,6 +187,10 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
   which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
   default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one
   observation. xz is also the fastest to read back here, since most of the output is long match copies.
+- **A recording is whole only once it is closed.** xz holds back what it has not yet written out, and Python's
+  `lzma` cannot flush mid-stream. A run killed after 10 exchanges left an empty file, after 200 left 96
+  readable, and after 1000 left 930. Reading one back ends in `EOFError`, which `Recording` turns into a
+  `ProtocolError`.
 - **A game against the computer says it is over on the observation that carries the results.** The step before
   it still answers `in_game`. Once over, `step` and `action` are refused with `Game has already ended`, while
   `observation` goes on answering with the results. Nothing in the protocol stops a step being the first to say

@@ -39,19 +39,25 @@ class Recording:
     def __iter__(self) -> Generator[Exchange, None, None]:
         """Every exchange, in the order the game answered them."""
         with lzma.open(self.path, "rb") as stream:
-            if stream.read(len(_HEADER)) != _HEADER:
-                raise ProtocolError(f"{self.path} is not a recording this version of NachOS can read")
-            while (request := _read(stream, sc2api_pb2.Request)) is not None:
-                response = _read(stream, sc2api_pb2.Response)
-                if response is None:
-                    raise ProtocolError(f"{self.path} ends on a request the game never answered")
-                yield Exchange(request, response)
+            try:
+                if stream.read(len(_HEADER)) != _HEADER:
+                    raise ProtocolError(f"{self.path} is not a recording this version of NachOS can read")
+                while (request := _read(stream, sc2api_pb2.Request)) is not None:
+                    response = _read(stream, sc2api_pb2.Response)
+                    if response is None:
+                        raise ProtocolError(f"{self.path} ends on a request the game never answered")
+                    yield Exchange(request, response)
+            except EOFError as cut:
+                raise ProtocolError(
+                    f"{self.path} stops partway, as it does when its run dies before closing it"
+                ) from cut
 
 
 class RecordingTransport:
     """A `Transport` that writes every exchange to disk on its way through to another one.
 
-    The file grows as the game is played, so a run that crashes still leaves everything up to the crash.
+    The file is whole only once the transport is closed. A run that dies first leaves what the compressor had
+    already written out, which misses the last stretch of the game, or all of a short one.
     """
 
     def __init__(self, transport: Transport, path: Path) -> None:

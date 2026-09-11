@@ -13,6 +13,7 @@ from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
     ConnectionTimeoutError,
+    Exchange,
     GameEndedError,
     GameNotStartedError,
     GamePorts,
@@ -401,15 +402,7 @@ class TestRecording:
     def test_a_recording_is_far_smaller_than_the_game_it_holds(self, tmp_path: Path) -> None:
         """Committing a corpus is only affordable because consecutive observations barely differ."""
         path = tmp_path / "game.sc2rec"
-        crowd = [raw_pb2.Unit(tag=index, unit_type=48, health=45.0) for index in range(500)]
-        answers = [
-            make_response(
-                observation=sc2api_pb2.ResponseObservation(
-                    observation=sc2api_pb2.Observation(game_loop=loop, raw_data=raw_pb2.ObservationRaw(units=crowd))
-                )
-            )
-            for loop in range(200)
-        ]
+        answers = _crowded_observations(200)
         recorder = _recorder(path, *answers)
         client = Client(recorder)
         for _ in answers:
@@ -450,9 +443,38 @@ class TestRecording:
         with pytest.raises(ProtocolError, match="never answered"):
             list(Recording(path))
 
+    def test_a_recording_whose_run_died_gives_what_it_holds_then_says_so(self, tmp_path: Path) -> None:
+        """A run that dies never finishes the compressed stream, so it leaves a prefix of the file it would have."""
+        path = tmp_path / "game.sc2rec"
+        recorder = _recorder(path, *_crowded_observations(200))
+        client = Client(recorder)
+        for _ in range(200):
+            client.observation()
+        recorder.close()
+        whole = path.read_bytes()
+        path.write_bytes(whole[: len(whole) // 2])
+
+        read: list[Exchange] = []
+        with pytest.raises(ProtocolError, match="dies before closing"):
+            read.extend(Recording(path))
+        assert 0 < len(read) < 200
+
+
+def _crowded_observations(count: int) -> list[sc2api_pb2.Response]:
+    """Answers to `count` observations of the same 500 marines, a game loop apart."""
+    crowd = [raw_pb2.Unit(tag=index, unit_type=48, health=45.0) for index in range(500)]
+    return [
+        make_response(
+            observation=sc2api_pb2.ResponseObservation(
+                observation=sc2api_pb2.Observation(game_loop=loop, raw_data=raw_pb2.ObservationRaw(units=crowd))
+            )
+        )
+        for loop in range(count)
+    ]
+
 
 def _truncated(tmp_path: Path, *, cut: int) -> Path:
-    """A recording of one exchange with its last `cut` bytes lost, as a run killed mid-write would leave it."""
+    """A recording of one exchange missing its last `cut` bytes, in a stream still closed properly."""
     path = tmp_path / "game.sc2rec"
     recorder = _recorder(path, _VERSION)
     Client(recorder).ping()
