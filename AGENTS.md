@@ -171,6 +171,11 @@ Refresh it from a current ladder map, never from whatever happened to be loaded 
 - **One connection can play game after game.** `sc2api.proto` describes `ended` as "ready for a new game", and
   a client that left a game on Pylon went on to create and join one on Torches. Anything held because it does
   not change during a game is held per game, never per connection.
+- **A game seats as many players as its map has slots, and drops the rest without a word.** On PylonAIE a
+  bot with two or with three computers was created and joined as a two-player game, `game_info` listing two
+  players, and nothing was refused. `PlayerSetup` has no team field, so teams cannot be set either. A bot alone
+  on a map plays; computers without a participant are refused ("There must be at least one participant or
+  observer").
 - **A recorded game is enormous raw and tiny compressed.** A full bare game is 771 exchanges and 63 MB, of
   which the observations are all but 0.4 MB -- about 80 KB each, changing very little between steps. xz at its
   default preset takes that to 0.2 MB, some 200x; gzip manages 30x, because a 32 KB window cannot span even one

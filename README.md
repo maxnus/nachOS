@@ -42,7 +42,8 @@ def manage_workers(event):
 ```
 
 NachOS itself never creates or exposes a singleton, and holds no module-level mutable state. The singleton is your
-choice, confined to one line of your own code — so two bots can run in one process for self-play or tests.
+choice, confined to one line of your own code, and one api plays any number of games in turn. Two bots playing
+each other run a process each, as they would on a ladder.
 
 Your own helpers live in your own modules, as ordinary functions and objects. There is no mixin to inherit and no
 extension hook to register. If you find yourself wanting to subclass so you can hang a helper off `api`, that is a
@@ -52,7 +53,7 @@ gap in NachOS rather than a pattern to follow — please open an issue.
 handlers as your modules load. Connecting happens later, in the runner:
 
 ```python
-run_local(api, map="AcropolisAIE", opponent=Computer(Race.Zerg, Difficulty.VeryHard))
+run_local("PylonAIE", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.VERY_HARD))
 ```
 
 ## Requirements

@@ -1,6 +1,5 @@
 """Playing a game, on a client this library starts or one a ladder has already started."""
 
-from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +24,8 @@ class ApiBot:
 
 def run_local(
     game_map: Map | str,
-    players: Sequence[ApiBot | Computer],
+    bot: ApiBot,
+    opponent: Computer | None = None,
     *,
     realtime: bool = False,
     time_limit: float | None = None,
@@ -34,21 +34,20 @@ def run_local(
     installation: Installation | None = None,
     window: tuple[int, int] = (1024, 768),
 ) -> Result:
-    """Start a game client, create a match on `game_map` between `players`, and play it out.
+    """Start a game client, create a match on `game_map` for `bot` against `opponent`, and play it out.
 
-    Exactly one player is an `ApiBot`, because one client plays one player. The client is stopped and its
-    temporary directory removed however the game ends.
+    The bot takes the first slot, and without an `opponent` it plays the map alone. The client is stopped and
+    its temporary directory removed however the game ends.
     """
-    bot = _only_bot(players)
     if isinstance(game_map, str):
         installation = installation or Installation.find()
         game_map = Map.find(game_map, installation=installation)
     # A participant tells the game that a client will fill the slot; who fills it is settled at the join.
-    setups: list[Player] = [Participant() if isinstance(player, ApiBot) else player for player in players]
+    players: list[Player] = [Participant()] if opponent is None else [Participant(), opponent]
 
     with GameProcess.launch(installation, window=window) as game, closing(_connect(game.url, record_to)) as client:
         try:
-            client.create_game(game_map.path, setups, realtime=realtime, random_seed=random_seed)
+            client.create_game(game_map.path, players, realtime=realtime, random_seed=random_seed)
             client.join_game(bot.race, name=bot.name)
             return bot.api.play(client, realtime=realtime, time_limit=time_limit)
         finally:
@@ -79,14 +78,6 @@ def run_ladder(
         finally:
             # The ladder owns the client it started, so it is left running to be told what to do next.
             client.leave_game()
-
-
-def _only_bot(players: Sequence[ApiBot | Computer]) -> ApiBot:
-    """The player this process plays. Two of them would need a client each, which is not supported yet."""
-    bots = [player for player in players if isinstance(player, ApiBot)]
-    if len(bots) != 1:
-        raise ValueError(f"one process plays exactly one bot, and {len(bots)} were given")
-    return bots[0]
 
 
 def _connect(url: str, record_to: Path | None) -> Client:

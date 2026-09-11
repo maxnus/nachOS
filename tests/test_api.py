@@ -193,24 +193,24 @@ class TestRunningLocally:
         transport = _local_transport()
         _no_real_game(monkeypatch, transport)
 
-        run_local(_somewhere(), [ApiBot(Api(steps_per_turn=2), Race.TERRAN, "NachOS"), Computer(race=Race.ZERG)])
+        run_local(_somewhere(), ApiBot(Api(steps_per_turn=2), Race.TERRAN, "NachOS"), Computer(race=Race.ZERG))
 
         setups = transport.requests[0].create_game.player_setup
         assert [setup.type for setup in setups] == [sc2api_pb2.Participant, sc2api_pb2.Computer]
         assert not setups[0].HasField("race")
         assert setups[1].race == Race.ZERG.value
 
-    def test_the_players_keep_the_order_they_were_given(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_a_bot_without_an_opponent_plays_the_map_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _local_transport()
         _no_real_game(monkeypatch, transport)
-        run_local(_somewhere(), [Computer(), ApiBot(Api(steps_per_turn=2), Race.TERRAN)])
+        run_local(_somewhere(), ApiBot(Api(steps_per_turn=2), Race.TERRAN))
         setups = transport.requests[0].create_game.player_setup
-        assert [setup.type for setup in setups] == [sc2api_pb2.Computer, sc2api_pb2.Participant]
+        assert [setup.type for setup in setups] == [sc2api_pb2.Participant]
 
     def test_the_join_carries_the_race_and_the_name_the_bot_plays_under(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _local_transport()
         _no_real_game(monkeypatch, transport)
-        run_local(_somewhere(), [ApiBot(Api(steps_per_turn=2), Race.TERRAN, "NachOS"), Computer()])
+        run_local(_somewhere(), ApiBot(Api(steps_per_turn=2), Race.TERRAN, "NachOS"), Computer())
         joined = transport.requests[1].join_game
         assert joined.race == Race.TERRAN.value
         assert joined.player_name == "NachOS"
@@ -218,7 +218,7 @@ class TestRunningLocally:
     def test_the_client_this_library_started_is_stopped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _local_transport()
         game = _no_real_game(monkeypatch, transport)
-        result = run_local(_somewhere(), [ApiBot(Api(steps_per_turn=2), Race.TERRAN), Computer()])
+        result = run_local(_somewhere(), ApiBot(Api(steps_per_turn=2), Race.TERRAN), Computer())
         assert result is Result.VICTORY
         assert any(request.HasField("quit") for request in transport.requests)
         assert transport.closed
@@ -236,7 +236,7 @@ class TestRunningLocally:
         )
         game = _no_real_game(monkeypatch, transport)
         with pytest.raises(ProtocolError, match="InvalidMapPath"):
-            run_local(_somewhere(), [ApiBot(Api(), Race.TERRAN), Computer()])
+            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), Computer())
         assert any(request.HasField("quit") for request in transport.requests)
         assert transport.closed
         assert game.terminated
@@ -253,22 +253,12 @@ class TestRunningLocally:
         _no_real_game(monkeypatch, transport)
         path = tmp_path / "game.sc2rec"
         with pytest.raises(ProtocolError, match="Something no game has said yet"):
-            run_local(_somewhere(), [ApiBot(Api(steps_per_turn=2), Race.TERRAN), Computer()], record_to=path)
+            run_local(_somewhere(), ApiBot(Api(steps_per_turn=2), Race.TERRAN), Computer(), record_to=path)
         assert transport.closed
         assert [exchange.request.WhichOneof("request") for exchange in Recording(path)][-2:] == [
             "observation",
             "leave_game",
         ]
-
-    @pytest.mark.parametrize(
-        "players",
-        [[], [Computer()], [ApiBot(Api(), Race.TERRAN), ApiBot(Api(), Race.ZERG)]],
-        ids=["none", "only a computer", "two bots"],
-    )
-    def test_a_game_is_run_for_exactly_one_bot(self, players: list[ApiBot | Computer]) -> None:
-        """Two bots in one process would need a client each, which nothing here does yet."""
-        with pytest.raises(ValueError, match="exactly one bot"):
-            run_local(_somewhere(), players)
 
 
 class TestRunningOnALadder:
@@ -324,9 +314,7 @@ class TestAgainstTheRealGame:
         path = tmp_path / "game.sc2rec"
         opponent = Computer(race=Race.ZERG, difficulty=Difficulty.VERY_HARD)
         api = Api(steps_per_turn=16)
-        result = run_local(
-            _LADDER_MAP, [ApiBot(api, Race.TERRAN, "NachOS"), opponent], record_to=path, window=(640, 480)
-        )
+        result = run_local(_LADDER_MAP, ApiBot(api, Race.TERRAN, "NachOS"), opponent, record_to=path, window=(640, 480))
         assert result in (Result.VICTORY, Result.DEFEAT)
         assert api.time > 60
 
