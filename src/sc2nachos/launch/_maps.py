@@ -6,12 +6,13 @@ from typing import Self
 
 from loguru import logger
 
+from sc2nachos._errors import NachOSError
 from sc2nachos.launch._installation import Installation
 
 _SUFFIX = ".SC2Map"
 
 
-class MapNotFoundError(Exception):
+class MapNotFoundError(NachOSError, LookupError):
     """The installation holds no map by the name asked for."""
 
 

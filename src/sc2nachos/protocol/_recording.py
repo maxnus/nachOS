@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
-from google.protobuf.message import Message
+from google.protobuf.message import DecodeError, Message
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
@@ -51,6 +51,8 @@ class Recording:
                 raise ProtocolError(
                     f"{self.path} stops partway, as it does when its run dies before closing it"
                 ) from cut
+            except lzma.LZMAError as error:
+                raise ProtocolError(f"{self.path} is not a recording, or is a damaged one: {error}") from error
 
 
 class RecordingTransport:
@@ -138,7 +140,10 @@ def _read[MessageT: Message](stream: IO[bytes], kind: type[MessageT]) -> Message
     if len(payload) != size:
         raise ProtocolError(f"the recording ends {size - len(payload)} bytes short of a {kind.__name__}")
     message = kind()
-    message.ParseFromString(payload)
+    try:
+        message.ParseFromString(payload)
+    except DecodeError as error:
+        raise ProtocolError(f"the recording holds a {kind.__name__} that does not parse") from error
     return message
 
 

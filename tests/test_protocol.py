@@ -291,6 +291,11 @@ class TestWebSocketTransport:
         with pytest.raises(ProtocolError, match="text where the protocol is binary"):
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
+    def test_bytes_that_do_not_parse_are_not_a_response(self) -> None:
+        websocket = FakeWebSocket(b"\xff\xff\xff")
+        with pytest.raises(ProtocolError, match="does not parse"):
+            self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+
     def test_closing_closes_the_socket(self) -> None:
         websocket = FakeWebSocket()
         self._transport(websocket).close()
@@ -455,6 +460,23 @@ class TestRecording:
         path = tmp_path / "junk.sc2rec"
         path.write_bytes(lzma.compress(b"whatever this file is, it is not one of ours"))
         with pytest.raises(ProtocolError, match="not a recording"):
+            list(Recording(path))
+
+    def test_a_file_that_is_not_even_compressed_says_so(self, tmp_path: Path) -> None:
+        path = tmp_path / "junk.sc2rec"
+        path.write_bytes(b"whatever this file is, it is not one of ours")
+        with pytest.raises(ProtocolError, match="not a recording"):
+            list(Recording(path))
+
+    def test_a_recording_holding_a_message_that_does_not_parse_says_so(self, tmp_path: Path) -> None:
+        path = tmp_path / "game.sc2rec"
+        recorder = _recorder(path, _VERSION)
+        Client(recorder).ping()
+        recorder.close()
+        answer = len(_VERSION.SerializeToString())
+        whole = lzma.decompress(path.read_bytes())
+        path.write_bytes(lzma.compress(whole[:-answer] + b"\xff" * answer))
+        with pytest.raises(ProtocolError, match="Response that does not parse"):
             list(Recording(path))
 
     def test_a_recording_cut_short_says_so(self, tmp_path: Path) -> None:

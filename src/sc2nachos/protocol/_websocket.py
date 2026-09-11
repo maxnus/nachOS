@@ -2,6 +2,7 @@
 
 from typing import Self
 
+from google.protobuf.message import DecodeError
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 from websocket import (
@@ -59,7 +60,10 @@ class WebSocketTransport:
         if not isinstance(payload, bytes):
             raise ProtocolError(f"the game sent text where the protocol is binary: {payload!r}")
         response = sc2api_pb2.Response()
-        response.ParseFromString(payload)
+        try:
+            response.ParseFromString(payload)
+        except DecodeError as error:
+            raise ProtocolError("the game sent an answer that does not parse") from error
         return response
 
     def close(self) -> None:
