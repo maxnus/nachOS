@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, final
 
 import numpy
 
+from sc2nachos.gamemap._ramp import Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.protocol import ProtocolError
@@ -31,7 +32,16 @@ class GameMap:
     raises. Everything that reads the map shares its grids, so they refuse writes: `copy()` one to change it.
     """
 
-    __slots__ = ("_corners", "_height", "_name", "_opponent_start_locations", "_pathing", "_placement", "_playable")
+    __slots__ = (
+        "_corners",
+        "_height",
+        "_name",
+        "_opponent_start_locations",
+        "_pathing",
+        "_placement",
+        "_playable",
+        "_ramps",
+    )
 
     def __init__(self, info: sc2api_pb2.ResponseGameInfo) -> None:
         """Read the map out of the game's answer to `RequestGameInfo`."""
@@ -47,6 +57,7 @@ class GameMap:
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
         self._opponent_start_locations = tuple(Point.from_proto(location) for location in start.start_locations)
+        self._ramps = find_ramps(self._pathing, self._placement, self._height)
 
     @property
     def name(self) -> str:
@@ -102,6 +113,11 @@ class GameMap:
             + (up_left - low_left) * dy
             + (low_left - low_right - up_left + up_right) * dx * dy
         )
+
+    @property
+    def ramps(self) -> tuple[Ramp, ...]:
+        """Every ramp on the map, ordered by the lower left tile of each."""
+        return self._ramps
 
     @property
     def opponent_start_locations(self) -> tuple[Point, ...]:

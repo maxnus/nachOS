@@ -10,6 +10,12 @@ The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, wi
 `docs/plans/nachOS-initial-prompt.md`. How to decide which game ids are real, and to refresh them after a patch,
 is in `docs/curating-ids.md`.
 
+## Keep this file small
+
+Every agent reads all of it before every task. A line belongs here only if you can name the task whose outcome
+it changes; everything else goes where it is used, as **Where a finding goes** below says. Delete a line the
+code has overtaken.
+
 ## Python
 
 Use this repository's own environment, `.venv`, which `uv sync --extra dev` creates, and run every tool
@@ -162,3 +168,4 @@ of its buildings.
 | Type check | `uv run pyright` |
 | Regenerate raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as `docs/curating-ids.md` says |
 | Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
+| Look at the ramps on a map | `uv run python tools/show_ramps.py`, which starts the game |

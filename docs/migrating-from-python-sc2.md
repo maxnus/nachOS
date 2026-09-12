@@ -93,6 +93,10 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `enemy_start_locations` | `api.map.opponent_start_locations` |
+| `game_info.map_ramps` | `api.map.ramps` |
+| `game_info.vision_blockers` | nothing; see below |
+| `ramp.points`, `ramp.upper`, `ramp.lower` | `ramp.tiles`, `ramp.top`, `ramp.bottom` |
+| `ramp.top_center`, `ramp.bottom_center`, `ramp.center` | `ramp.top.center`, `ramp.bottom.center`, `ramp.tiles.center` |
 
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
@@ -105,3 +109,21 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   reads that as the tile's. On a ramp, that is up to 0.41 off the ground elsewhere in the tile, and beside a cliff
   it can be the level on the other side. `api.map.height` averages the tile's corners on its own side of any
   cliff, and `api.map.height_at(p)` interpolates between them.
+- **A ramp's ends are the tiles within a byte of its highest and lowest, and come out the same size whichever
+  way it faces.** python-sc2's `upper` and `lower` are the tiles sharing the highest and lowest terrain byte,
+  which it reads at each tile's lower left corner, so a ramp and its mirror image give ends of different sizes --
+  13 and 6 tiles for two halves of the same map. NachOS reads the height at the tile's center, which is
+  symmetric, and allows a byte because a row straight across a ramp is not quite level where the corners under it
+  differ.
+- **A patch of ground is a ramp whole, and no patch is dropped for being small.** python-sc2 asks of each tile
+  alone whether the nine terrain bytes around it are equal, calls a tile a ramp point if they are not, and then
+  throws away any group of fewer than 8 of them. NachOS groups the ground a unit can walk over but cannot build
+  on and reads the whole patch: one whose heights span half a level or more climbs from one level to the next,
+  and is a ramp. On the 2026 ladder pool the two find the same ramps, tile for tile.
+- **There is no `vision_blockers`, because the map's grids cannot say.** A bridge, a stand of trees and the
+  ground under an indestructible doodad are all level, walkable and unbuildable, and nothing in
+  `ResponseGameInfo` separates them. python-sc2's `vision_blockers` is that whole mixture: on PylonAIE_v4 it
+  calls 33 tiles of each of the map's two bridges a vision blocker. A bot that needs the real ones can find them
+  in a game, from what its units can and cannot see.
+- **No wall-in placements.** python-sc2's `Ramp` also answers where to put supply depots and a barracks to wall
+  off a ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.

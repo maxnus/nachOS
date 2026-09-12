@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from loguru import logger
-from s2clientprotocol import sc2api_pb2
+from s2clientprotocol import debug_pb2, sc2api_pb2
 
 from sc2nachos.match import Computer, Participant, Player, Race, Result
 from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, GameNotStartedError, ProtocolError
@@ -223,6 +223,14 @@ class Client:
         """Send `actions`, and get back the game's verdict on each one in the order they were given."""
         response = self._send(sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=actions)), "action")
         return response.action
+
+    def debug(self, commands: Sequence[debug_pb2.DebugCommand]) -> None:
+        """Send debug `commands`, which only a game the client started itself accepts.
+
+        The game answers nothing. A drawing lasts until the next debug request, so one that should stay on the
+        screen is sent again every turn.
+        """
+        self._send(sc2api_pb2.Request(debug=sc2api_pb2.RequestDebug(debug=commands)))
 
     def save_replay(self) -> bytes:
         """The replay of the game so far, as the bytes of a `.SC2Replay` file."""
