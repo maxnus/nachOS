@@ -10,6 +10,12 @@ The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, wi
 `docs/plans/nachOS-initial-prompt.md`. How to decide which game ids are real, and to refresh them after a patch,
 is in `docs/curating-ids.md`.
 
+## Keep this file small
+
+Every agent reads all of it before every task. A line belongs here only if you can name the task whose outcome
+it changes; everything else goes where it is used, as **Where a finding goes** below says. Delete a line the
+code has overtaken.
+
 ## Python
 
 Use this repository's own environment, `.venv`, which `uv sync --extra dev` creates, and run every tool
