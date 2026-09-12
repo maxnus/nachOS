@@ -7,7 +7,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 ## Running a game
 
 - **Nothing is subclassed, and nothing is `async`.** Construct an `Api`, at import time if you like, and hand it
-  to a runner along with the race it plays: `run_local("PylonAIE", ApiBot(api, Race.TERRAN), Computer(Race.ZERG))`.
+  to a runner along with the race it plays: `run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG))`.
 - **A turn is one step unless you say otherwise.** Use `Api(steps_per_turn=4)` to match python-sc2, whose
   `client.game_step` defaults to 4. The value is fixed for the life of the api and cannot be changed mid-game.
 - **`Computer()` defaults to very hard, with a random race and build.** python-sc2's `Computer` requires a race

@@ -53,7 +53,7 @@ gap in NachOS rather than a pattern to follow — please open an issue.
 handlers as your modules load. Connecting happens later, in the runner:
 
 ```python
-run_local("PylonAIE", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.VERY_HARD))
+run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.VERY_HARD))
 ```
 
 ## Coming from python-sc2

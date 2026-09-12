@@ -26,7 +26,7 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, RecordingTransport, ReplayTransport, Status, WebSocketTransport
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
-_LADDER_MAP = "PylonAIE"
+_LADDER_MAP = "PylonAIE_v4"
 
 
 def make_install(

@@ -8,7 +8,6 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
-from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, ReplayTransport
 
@@ -16,9 +15,6 @@ from sc2nachos.protocol import Client, Recording, ReplayTransport
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
 _CURATED: tuple[type[ReadableIntEnum], ...] = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
-# Obstacles on current maps that the curated set leaves out on purpose, because no size names them. M3 has to let
-# a bot meet one without raising.
-_UNNAMED_OBSTACLES = {RawUnitTypeId.DestructibleRockEx1DiagonalHugeBLUR, RawUnitTypeId.DestructibleExpeditionGate6x6}
 
 
 def _observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:
@@ -65,6 +61,5 @@ def test_every_id_a_game_reported_is_curated(path: Path) -> None:
         reported[EffectId].update(effect.effect_id for effect in raw.effects)
 
     known = {enum: {int(member) for member in enum} for enum in _CURATED}
-    known[UnitTypeId] |= _UNNAMED_OBSTACLES
     missing = {enum.__name__: sorted(ids - known[enum]) for enum, ids in reported.items()}
     assert not any(missing.values()), f"{path.stem} reported ids with no curated member: {missing}"
