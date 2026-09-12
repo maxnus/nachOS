@@ -100,7 +100,7 @@ def _somewhere() -> Map:
 
 
 class TestBeforeAGame:
-    @pytest.mark.parametrize("name", ["client", "map", "step", "time", "result"])
+    @pytest.mark.parametrize("name", ["client", "map", "data", "step", "time", "result"])
     def test_what_belongs_to_a_game_says_there_is_none(self, name: str) -> None:
         """Zero is a step a game plays and `None` is a game still going, so neither can stand for no game at all."""
         with pytest.raises(NotPlayingError, match="no game has been joined"):
@@ -118,6 +118,7 @@ class TestPlaying:
         assert api.result is Result.VICTORY
         assert api.client is client
         assert api.map.name == "Somewhere"
+        assert api.data.units == {}
 
     def test_the_map_and_the_tables_are_asked_for_once(self) -> None:
         """The map never changes, the tables are wanted before any upgrade, and game_info alone is 77 KB an ask."""

@@ -51,6 +51,13 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   `ADEPT_SHADE`. `UnitTypeId(old.value)` translates one to the other.
 - **The curated enums hold only what a melee game needs.** Converting an id they leave out raises `ValueError`.
   `sc2nachos.ids.raw` holds every id, under Blizzard's own names.
+- **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
+  `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
+  `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where
+  `UpgradeId` has to keep it. python-sc2 keeps Blizzard's catalog spelling instead:
+  `BARRACKSTRAIN_MARINE`, `TERRANBUILD_BARRACKS`, `RESEARCH_TERRANINFANTRYARMORLEVEL1`. An ability several
+  units perform is named `GENERAL` in the performer's place -- `GENERAL_BURROW`, `GENERAL_LIFT`,
+  `GENERAL_ATTACK`.
 - **Ids are ints.** They are `IntEnum`s, so `UnitTypeId.MARINE == 48` is true. python-sc2's ids are plain
   `Enum`s, for which it is false.
 - **The match enums are upper case**: `Race.TERRAN`, `Difficulty.VERY_HARD`, `Result.VICTORY`, and
@@ -127,3 +134,84 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   in a game, from what its units can and cannot see.
 - **No wall-in placements.** python-sc2's `Ramp` also answers where to put supply depots and a barracks to wall
   off a ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.
+
+## The tables
+
+| python-sc2 | NachOS |
+|---|---|
+| `game_data` | `api.data` |
+| `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
+| `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
+| `unit_data.cost` | `unit_data.cost`, a `Resources` without the time |
+| `unit_data.cost.time` | `unit_data.build_time`, in seconds |
+| `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_cost`, `unit_data.supply_provided` |
+| `unit_data._proto.movement_speed` | `unit_data.speed` |
+| `unit_data._proto.weapons` | `unit_data.weapons` |
+| `unit_data.unit_alias` | `unit_data.base_type` |
+| `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
+| `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
+| `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
+| `upgrade_data.cost.time` | `upgrade_data.research_time`, in seconds |
+| `weapon.speed` | `weapon.cooldown` |
+| `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
+| `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
+| `ability_data.is_building` | `ability_data.needs_placement` |
+| `game_data.calculate_ability_cost(a)` | nothing; see below |
+
+- **A table is keyed by the id itself**, where python-sc2 keys by the number inside it and every lookup reads
+  `units[UnitTypeId.MARINE.value]`.
+- **No row carries a name**, because the curated id is a better one than the game gives. A unit type, upgrade or
+  effect names itself exactly as the catalog does, so `RawUnitTypeId(int(row.id)).name` is the game's spelling.
+  An ability has three names and none of them is it: `link_name` is the command card group, which 15 protoss
+  build abilities share; `button_name` is blank for ten of them and `BurrowDown` for twelve; `friendly_name` is
+  a sentence, "Attack Attack" for the exact attack. python-sc2 carries all three.
+- **`remaps_to` runs from the exact ability to the general one.** A unit always reports the exact id it is
+  running, and the general one is a spelling you may order instead: order `GENERAL_MOVE` and the unit reports
+  `GENERAL_MOVE_EXACT`. A general id is never offered by `RequestQuery`, but it is accepted as an order and
+  the game picks which exact one it meant, so `ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` researches whichever level
+  comes next and `GENERAL_BURROW` burrows whatever the unit is. python-sc2 folds this into `AbilityData.id`,
+  which answers the remapped id while `exact_id` answers the row's own, and ships the same relation by hand as
+  `generic_redirect_abilities`. It does not catch every pair of that shape: a liberator reports
+  `LIBERATOR_SIEGE_EXACT` for the `LIBERATOR_SIEGE` it was ordered, and all four liberator rows leave
+  `remaps_to` empty. python-sc2 has the same blind spot, since it reads the same field.
+- **A table holds only the rows a bot can name.** The game describes its whole catalog -- 2005 unit types, 940
+  of them ids it skips and with no name at all, and 4134 abilities -- and a table keeps the ones the curated ids
+  name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters
+  instead on the `available` flag, which is no filter: the game marks `MorphZerglingToBaneling` unavailable, and
+  a zergling morphs anyway.
+- **A field naming something uncurated reads as `None`, and `tech_aliases` drops it.** Twenty-two unit types
+  have no `creation_ability` and one has no `tech_aliases`, for two reasons, each checked in game rather
+  than guessed. Six name an ability the game no longer honors: a lurker's is
+  `LurkerAspectMPFromHydraliskBurrowed`, a baneling's is `MorphZerglingToBaneling`, a rich refinery's is a
+  second `TerranBuild` row, an auto turret's is `RavenBuild_AutoTurret`, a locust's is `SpawnInfestedTerran`
+  and a purification nova's is `PurificationNovaMorph` -- none is ever offered, none does anything when
+  ordered, and `HYDRALISK_MORPH_LURKER`, `ZERGLING_MORPH_BANELING`, plain `SCV_BUILD_REFINERY`,
+  `RAVEN_SPAWN_AUTO_TURRET`, `SWARM_HOST_SPAWN_LOCUST` and `DISRUPTOR_PURIFICATION_NOVA` are what work. The
+  rest name one nothing can order at all, since the game disguises a changeling, collapses a tower, takes a
+  locust into the air and digs a creep tumor in by itself, and a bare tech lab or reactor is a tech
+  requirement no unit is built as.
+  The viking is the `tech_aliases` one: its alias is a row with no cost, speed, sight or weapon that nothing
+  requires and no unit is ever one of. python-sc2 keeps every one of these, because it filters unit types on
+  `available` and the game sets that flag on them.
+- **There is no ability for unloading one passenger.** The catalog's `UnloadUnit_*` rows cannot be ordered
+  through `RequestAction` at all: the game takes it as a UI action, `ActionCargoPanelUnload` against the
+  passenger's index, after a raw command with `ability_id=0` has selected the transport, and it needs both
+  `raw_affects_selection` and a feature layer turned on. NachOS asks for neither and has no UI path, so it
+  cannot do this yet; `MEDIVAC_UNLOAD` and `MEDIVAC_UNLOAD_AT` put everyone down at once.
+- **A row's `id` is its own.** python-sc2's `AbilityData.id` answers the generic id the ability remaps to, and
+  `exact_id` the row's own. NachOS keeps `id` the row's own and puts `remaps_to` beside it.
+- **A cost is minerals and vespene, and times are seconds beside it.** python-sc2's `Cost` carries a `time`
+  in steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong
+  nearly everywhere. NachOS has `Resources`, which adds, subtracts, scales, divides and answers `covers`, and
+  `build_time` and `research_time` are their own fields in seconds. Its amounts are fractional, since half a
+  cost and an average cost are ordinary things to want; what the game gave stays whole until something divides
+  it.
+- **The cost of a morph is everything spent to reach it, and its build time is only the last step.** An orbital
+  command is 550 minerals, the command center's 400 included, and 25 seconds, the morph alone. python-sc2
+  subtracts the predecessor in `morph_cost` and `calculate_ability_cost`, reading a hand-written
+  `UNIT_TRAINED_FROM` and hard-coding that zerglings come in pairs and that a baneling really costs 25/25.
+  NachOS hands back the game's numbers as they stand; what morphs from what belongs to the relationship tables.
+- **Reading the tables leaves the message they came from alone.** Building python-sc2's `GameData` writes
+  `MORPH_LURKER` over that same lurker row in the `ResponseData` it was handed, so whatever reads that message
+  afterwards sees the substitution rather than what the game said.
+- **There is no buff table.** `BuffData` carries an id and a name and nothing else, and the name is the id's.

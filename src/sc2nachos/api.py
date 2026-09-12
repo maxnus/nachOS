@@ -8,6 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
+from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client
@@ -23,9 +24,7 @@ class _Game:
 
     client: Final[Client]
     map: Final[GameMap]
-    # The tables as they stood before any upgrade, which both sides share. Asked again later they fold in this
-    # player's upgrades, and with one entry per unit type they would hand those to the enemy's units too.
-    data: Final[sc2api_pb2.ResponseData]
+    data: Final[GameData]
     observation: sc2api_pb2.ResponseObservation
     # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
     step: int
@@ -36,7 +35,7 @@ class _Game:
         """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
-        return cls(client, GameMap(info), data, observation, _step(observation))
+        return cls(client, GameMap(info), GameData(data), observation, _step(observation))
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
@@ -106,6 +105,11 @@ class Api:
     def map(self) -> GameMap:
         """The map the game is played on."""
         return self._playing().map
+
+    @property
+    def data(self) -> GameData:
+        """The tables the game is played by, as they stood before any upgrade."""
+        return self._playing().data
 
     @property
     def step(self) -> int:
