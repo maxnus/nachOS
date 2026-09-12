@@ -63,9 +63,9 @@ def make_response(status: Status | None = Status.IN_GAME, **fields: Any) -> sc2a
     return response
 
 
-def make_bits(*rows: str) -> common_pb2.ImageData:
-    """A one-bit image drawn as rows of `#` and `.`, the top row first, the way the map would look."""
-    bits = [char == "#" for row in reversed(rows) for char in row]
+def make_bits(*rows: str, drawn: str = "#") -> common_pb2.ImageData:
+    """A one-bit image drawn as rows of characters, the top row first, set wherever one of `drawn` stands."""
+    bits = [char in drawn for row in reversed(rows) for char in row]
     size = common_pb2.Size2DI(x=len(rows[0]), y=len(rows))
     return common_pb2.ImageData(bits_per_pixel=1, size=size, data=numpy.packbits(bits).tobytes())
 
@@ -82,10 +82,11 @@ def make_game_info(
     heights: common_pb2.ImageData | None = None,
     start_locations: tuple[tuple[float, float], ...] = (),
 ) -> sc2api_pb2.ResponseGameInfo:
-    """A map drawn as rows of `#` for open ground and `.` for none, the top row first, or eight by eight of open.
+    """A map drawn in rows, the top row first, or eight by eight of open ground.
 
-    The drawing is both the pathing and the placement grid. The map is playable from corner to corner unless
-    `playable` gives the corners `(x0, y0, x1, y1)` of a smaller area, and level unless `heights` says otherwise.
+    `#` is open ground, `~` ground a unit can walk over but not build on, and `.` ground it can do neither on.
+    The map is playable from corner to corner unless `playable` gives the corners `(x0, y0, x1, y1)` of a smaller
+    area, and level unless `heights` says otherwise.
     """
     rows = rows or ("#" * 8,) * 8
     width, height = len(rows[0]), len(rows)
@@ -94,7 +95,7 @@ def make_game_info(
         map_name="Somewhere",
         start_raw=raw_pb2.StartRaw(
             map_size=common_pb2.Size2DI(x=width, y=height),
-            pathing_grid=make_bits(*rows),
+            pathing_grid=make_bits(*rows, drawn="#~"),
             placement_grid=make_bits(*rows),
             terrain_height=heights or make_bytes(*([128] * width for _ in range(height))),
             playable_area=common_pb2.RectangleI(p0=common_pb2.PointI(x=x0, y=y0), p1=common_pb2.PointI(x=x1, y=y1)),

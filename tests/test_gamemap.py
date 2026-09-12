@@ -15,6 +15,10 @@ from support import make_bytes, make_game_info
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 _TOWNHALLS = {UnitTypeId.COMMAND_CENTER, UnitTypeId.HATCHERY, UnitTypeId.NEXUS}
 
+# Six tiles wide, climbing a level over the middle four: the corner bytes give tile heights 8.0, 8.125,
+# 8.625, 9.375, 9.875 and 10.0, no two corners of one tile a cliff apart.
+_SLOPE = make_bytes(*[[191, 191, 193, 199, 205, 207, 207]] * 8)
+
 
 class TestReadingAMap:
     def test_the_grids_read_the_map_the_way_up_it_is_drawn(self) -> None:
@@ -97,6 +101,29 @@ class TestReadingAMap:
         game_map = GameMap(make_game_info(start_locations=((5.5, 2.5),)))
         assert game_map.opponent_start_locations == (Point((5.5, 2.5)),)
 
+    def test_a_slope_a_unit_walks_but_cannot_build_on_is_a_ramp(self) -> None:
+        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE))
+        (ramp,) = game_map.ramps
+        assert set(ramp.tiles) == {Tile(x, y) for x in range(1, 5) for y in range(3)}
+        assert set(ramp.top) == {Tile(4, y) for y in range(3)}
+        assert set(ramp.bottom) == {Tile(1, y) for y in range(3)}
+        assert ramp.top.center == Point((4.5, 1.5))
+
+    def test_a_ramp_that_runs_diagonally_is_one_ramp(self) -> None:
+        # No two of the three tiles share an edge, so counting only edges would find no ramp at all.
+        game_map = GameMap(make_game_info("#~####", "##~###", "###~##", heights=_SLOPE))
+        (ramp,) = game_map.ramps
+        assert set(ramp.tiles) == {Tile(1, 2), Tile(2, 1), Tile(3, 0)}
+
+    def test_ground_that_climbs_no_level_is_no_ramp(self) -> None:
+        # A bridge or a stand of trees, level all through, and the first two tiles of the slope, 0.5 apart.
+        assert not GameMap(make_game_info("####", "#~~#", "####")).ramps
+        assert not GameMap(make_game_info(*["#~~###"] * 3, heights=_SLOPE)).ramps
+
+    def test_ramps_are_ordered_by_their_lower_left_tile(self) -> None:
+        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, "......", *["#~~~~#"] * 3, heights=_SLOPE))
+        assert [min(ramp.tiles) for ramp in game_map.ramps] == [Tile(1, 0), Tile(1, 4)]
+
     def test_an_image_too_short_for_its_size_is_refused(self) -> None:
         info = make_game_info()
         info.start_raw.pathing_grid.data = info.start_raw.pathing_grid.data[:-1]
@@ -166,3 +193,25 @@ class TestARecordedMap:
         game_map = GameMap(info)
         assert game_map.opponent_start_locations
         assert _own_townhall(observation) not in game_map.opponent_start_locations
+
+    def test_a_ramp_is_walkable_ground_no_structure_can_stand_on(self, path: Path) -> None:
+        info, _ = _start(path)
+        game_map = GameMap(info)
+        assert game_map.ramps
+        for ramp in game_map.ramps:
+            for tile in ramp.tiles:
+                assert game_map.pathing[tile]
+                assert not game_map.placement[tile]
+
+    def test_a_ramp_climbs_one_level_and_no_more(self, path: Path) -> None:
+        info, _ = _start(path)
+        game_map = GameMap(info)
+        for ramp in game_map.ramps:
+            climb = game_map.height[min(ramp.top)] - game_map.height[min(ramp.bottom)]
+            assert 1.0 <= climb < 2.0
+
+    def test_a_ramp_leads_out_of_this_players_own_base(self, path: Path) -> None:
+        info, observation = _start(path)
+        game_map = GameMap(info)
+        townhall = _own_townhall(observation)
+        assert min(ramp.top.center.distance_to(townhall) for ramp in game_map.ramps) < 20
