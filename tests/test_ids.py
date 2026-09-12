@@ -58,9 +58,13 @@ def test_curated_is_a_subset_of_the_catalog(curated: type[ReadableIntEnum], raw:
     assert {int(member) for member in curated} <= catalog
 
 
-@pytest.mark.parametrize("enum", RAW)
-def test_catalog_ids_are_unique(enum: type[ReadableIntEnum]) -> None:
-    """No two catalog names share an id, so nothing is silently aliased away."""
+@pytest.mark.parametrize("enum", CURATED + RAW)
+def test_ids_are_unique(enum: type[ReadableIntEnum]) -> None:
+    """No two names share an id, so nothing is silently aliased away.
+
+    An `IntEnum` folds a second name for an id into an alias of the first, which would leave two spellings of one
+    ability reading as the same member rather than failing.
+    """
     assert len(enum.__members__) == len({int(member) for member in enum}), f"{enum.__name__} has aliased members"
 
 
@@ -81,7 +85,7 @@ def test_known_ids_have_expected_values() -> None:
     assert UnitTypeId.SCV == 45
     assert UnitTypeId.MARINE == 48
     assert UnitTypeId.COMMAND_CENTER == 18
-    assert AbilityId.SMART == 1
+    assert AbilityId.GENERAL_SMART == 1
 
 
 def test_renaming_preserves_identity() -> None:
