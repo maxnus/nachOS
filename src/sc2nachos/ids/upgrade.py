@@ -11,7 +11,7 @@ from sc2nachos.ids.raw import RawUpgradeId
 class UpgradeId(ReadableIntEnum):
     """Upgrade ids used in multiplayer games."""
 
-    ADEPT_GLAIVES = RawUpgradeId.AdeptPiercingAttack  # "Resonating Glaives" in game
+    ADRENAL_GLANDS = RawUpgradeId.zerglingattackspeed  # "Adrenal Glands" in game
     BANELING_SPEED = RawUpgradeId.CentrificalHooks  # "Centrifugal Hooks" in game
     BANSHEE_CLOAK = RawUpgradeId.BansheeCloak  # "Cloaking Field" in game
     BANSHEE_SPEED = RawUpgradeId.BansheeSpeed  # "Hyperflight Rotors" in game
@@ -25,6 +25,8 @@ class UpgradeId(ReadableIntEnum):
     CONCUSSIVE_SHELLS = RawUpgradeId.PunisherGrenades
     DARK_TEMPLAR_BLINK = RawUpgradeId.DarkTemplarBlinkUpgrade  # "Shadow Stride" in game
     DRILLING_CLAWS = RawUpgradeId.DrillClaws
+    GHOST_CLOAK = RawUpgradeId.PersonalCloaking
+    GLAIVES = RawUpgradeId.AdeptPiercingAttack  # "Resonating Glaives" in game
     HISEC_AUTO_TRACKING = RawUpgradeId.HiSecAutoTracking
     HYDRALISK_RANGE = RawUpgradeId.EvolveGroovedSpines  # "Grooved Spines" in game
     HYDRALISK_SPEED = RawUpgradeId.EvolveMuscularAugments  # "Muscular Augments" in game
@@ -32,12 +34,10 @@ class UpgradeId(ReadableIntEnum):
     LURKER_BURROW_SPEED = RawUpgradeId.DiggingClaws  # "Adaptive Talons" in game
     LURKER_RANGE = RawUpgradeId.LurkerRange  # "Seismic Spines" in game
     MEDIVAC_SPEED_BOOST = RawUpgradeId.MedivacIncreaseSpeedBoost  # "Rapid Reignition System" in game
-    MICROBIAL_SHROUD = RawUpgradeId.MicrobialShroud
     NEURAL_PARASITE = RawUpgradeId.NeuralParasite
     OBSERVER_SPEED = RawUpgradeId.ObserverGraviticBooster  # "Gravitic Boosters" in game
     OVERLORD_SPEED = RawUpgradeId.overlordspeed  # "Pneumatized Carapace" in game
     OVERLORD_TRANSPORT = RawUpgradeId.overlordtransport  # "Ventral Sacs" in game
-    PERSONAL_CLOAKING = RawUpgradeId.PersonalCloaking
     PHOENIX_RANGE = RawUpgradeId.PhoenixRangeUpgrade  # "Anion Pulse-Crystals" in game
     PROTOSS_AIR_ARMOR_1 = RawUpgradeId.ProtossAirArmorsLevel1
     PROTOSS_AIR_ARMOR_2 = RawUpgradeId.ProtossAirArmorsLevel2
@@ -54,11 +54,10 @@ class UpgradeId(ReadableIntEnum):
     PROTOSS_SHIELDS_1 = RawUpgradeId.ProtossShieldsLevel1
     PROTOSS_SHIELDS_2 = RawUpgradeId.ProtossShieldsLevel2
     PROTOSS_SHIELDS_3 = RawUpgradeId.ProtossShieldsLevel3
-    PSI_STORM = RawUpgradeId.PsiStormTech
-    ROACH_BURROW_MOVE = RawUpgradeId.TunnelingClaws
     ROACH_SPEED = RawUpgradeId.GlialReconstitution
     SMART_SERVOS = RawUpgradeId.SmartServos
     STIMPACK = RawUpgradeId.Stimpack
+    STORM = RawUpgradeId.PsiStormTech
     TERRAN_INFANTRY_ARMOR_1 = RawUpgradeId.TerranInfantryArmorsLevel1
     TERRAN_INFANTRY_ARMOR_2 = RawUpgradeId.TerranInfantryArmorsLevel2
     TERRAN_INFANTRY_ARMOR_3 = RawUpgradeId.TerranInfantryArmorsLevel3
@@ -74,13 +73,13 @@ class UpgradeId(ReadableIntEnum):
     TERRAN_VEHICLE_WEAPONS_1 = RawUpgradeId.TerranVehicleWeaponsLevel1
     TERRAN_VEHICLE_WEAPONS_2 = RawUpgradeId.TerranVehicleWeaponsLevel2
     TERRAN_VEHICLE_WEAPONS_3 = RawUpgradeId.TerranVehicleWeaponsLevel3
+    TUNNELING_CLAWS = RawUpgradeId.TunnelingClaws
     ULTRALISK_ARMOR = RawUpgradeId.ChitinousPlating
     ULTRALISK_SPEED = RawUpgradeId.AnabolicSynthesis
     VOID_RAY_SPEED = RawUpgradeId.VoidRaySpeedUpgrade  # "Flux Vanes" in game
     WARP_GATE = RawUpgradeId.WarpGateResearch
     WARP_PRISM_SPEED = RawUpgradeId.GraviticDrive  # "Gravitic Drive" in game
     YAMATO_CANNON = RawUpgradeId.BattlecruiserEnableSpecializations  # "Weapon Refit" in game
-    ZERGLING_ATTACK_SPEED = RawUpgradeId.zerglingattackspeed  # "Adrenal Glands" in game
     ZERGLING_SPEED = RawUpgradeId.zerglingmovementspeed  # "Metabolic Boost" in game
     ZERG_AIR_ARMOR_1 = RawUpgradeId.ZergFlyerArmorsLevel1
     ZERG_AIR_ARMOR_2 = RawUpgradeId.ZergFlyerArmorsLevel2
