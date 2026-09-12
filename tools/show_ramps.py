@@ -102,7 +102,7 @@ def show(name: str, seconds: float, installation: Installation) -> None:
             logger.info("{} has {} ramps, covering {} tiles", drawn.name, len(drawn.ramps), covered)
             picture = drawing(drawn)
             # Revealing the map is a toggle, so it is sent once and the drawing alone is sent again after it.
-            client.debug([debug_pb2.DebugCommand(game_state=debug_pb2.show_map), *picture])
+            client.debug([debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.show_map), *picture])
             _hold(client, picture, seconds)
         finally:
             client.leave_game()
