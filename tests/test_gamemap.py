@@ -109,6 +109,22 @@ class TestReadingAMap:
         assert set(ramp.bottom) == {Tile(1, y) for y in range(3)}
         assert ramp.top.center == Point((4.5, 1.5))
 
+    def test_a_ramp_end_is_the_whole_row_where_the_row_is_not_quite_level(self) -> None:
+        # The two corners down the left edge are a byte low, so the tile standing on them sits half a byte below
+        # the rest of its row. Read exactly, the bottom of this ramp would be that one tile.
+        heights = make_bytes(
+            [207, 207, 207, 207, 207],
+            [205, 205, 205, 205, 205],
+            [199, 199, 199, 199, 199],
+            [192, 193, 193, 193, 193],
+            [190, 191, 191, 191, 191],
+        )
+        game_map = GameMap(make_game_info(*["~~~~"] * 4, heights=heights))
+        (ramp,) = game_map.ramps
+        assert game_map.height[Tile(0, 0)] == game_map.height[Tile(1, 0)] - 0.0625
+        assert set(ramp.bottom) == {Tile(x, 0) for x in range(4)}
+        assert set(ramp.top) == {Tile(x, 3) for x in range(4)}
+
     def test_a_ramp_that_runs_diagonally_is_one_ramp(self) -> None:
         # No two of the three tiles share an edge, so counting only edges would find no ramp at all.
         game_map = GameMap(make_game_info("#~####", "##~###", "###~##", heights=_SLOPE))
@@ -209,6 +225,14 @@ class TestARecordedMap:
         for ramp in game_map.ramps:
             climb = game_map.height[min(ramp.top)] - game_map.height[min(ramp.bottom)]
             assert 1.0 <= climb < 2.0
+
+    def test_a_ramp_has_two_ends_that_do_not_meet(self, path: Path) -> None:
+        """The ends reach a byte into a ramp that climbs at least half a level, so they cannot overlap."""
+        info, _ = _start(path)
+        game_map = GameMap(info)
+        for ramp in game_map.ramps:
+            assert ramp.top and ramp.bottom
+            assert not set(ramp.top) & set(ramp.bottom)
 
     def test_a_ramp_leads_out_of_this_players_own_base(self, path: Path) -> None:
         info, observation = _start(path)

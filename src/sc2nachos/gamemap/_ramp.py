@@ -21,14 +21,20 @@ _TOUCHING = numpy.ones((3, 3), dtype=bool)
 # The levels a unit stands on are two apart, so ground spanning this much runs from one of them to another.
 _HALF_A_LEVEL = 1.0
 
+# How near the end of a ramp a tile counts as part of it, which is one byte of the height the game sends. A row
+# straight across a ramp is not quite level where the corners under it are not all the same: on four ramps of
+# the 2026 pool its tiles differ by half a byte, and an exact reading took two tiles of a ten-tile row. The next
+# row up any ramp measured is 0.1875 away, so a byte cannot reach it.
+_A_BYTE = 0.125
+
 
 @final
 @dataclass(frozen=True, slots=True)
 class Ramp:
     """The slope a ground unit walks up to reach the level above.
 
-    `top` and `bottom` are its highest and lowest tiles, which are the ends it is entered by unless something
-    stands in one of them. Its middle is `tiles.center`.
+    `top` and `bottom` are the rows it is entered by, unless something stands in one of them: the tiles within
+    a byte of its highest and of its lowest. Its middle is `tiles.center`.
     """
 
     tiles: TileSet
@@ -57,8 +63,9 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
             ramps.append(
                 Ramp(
                     tiles=TileSet(_tiles(patch, origin)),
-                    top=TileSet(_tiles(patch & (heights == high), origin)),
-                    bottom=TileSet(_tiles(patch & (heights == low), origin)),
+                    # A ramp climbs a level and an end reaches a byte into it, so the two cannot meet.
+                    top=TileSet(_tiles(patch & (heights >= high - _A_BYTE), origin)),
+                    bottom=TileSet(_tiles(patch & (heights <= low + _A_BYTE), origin)),
                 )
             )
     return tuple(sorted(ramps, key=lambda ramp: min(ramp.tiles)))

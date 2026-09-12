@@ -109,10 +109,12 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   reads that as the tile's. On a ramp, that is up to 0.41 off the ground elsewhere in the tile, and beside a cliff
   it can be the level on the other side. `api.map.height` averages the tile's corners on its own side of any
   cliff, and `api.map.height_at(p)` interpolates between them.
-- **A ramp's ends are its highest and lowest tiles, and come out the same size whichever way it faces.**
-  python-sc2's `upper` and `lower` are the tiles sharing the highest and lowest terrain byte, which it reads at
-  each tile's lower left corner, so a ramp and its mirror image give ends of different sizes -- 13 and 6 tiles for
-  two halves of the same map. NachOS reads the height at the tile's center, which is symmetric.
+- **A ramp's ends are the tiles within a byte of its highest and lowest, and come out the same size whichever
+  way it faces.** python-sc2's `upper` and `lower` are the tiles sharing the highest and lowest terrain byte,
+  which it reads at each tile's lower left corner, so a ramp and its mirror image give ends of different sizes --
+  13 and 6 tiles for two halves of the same map. NachOS reads the height at the tile's center, which is
+  symmetric, and allows a byte because a row straight across a ramp is not quite level where the corners under it
+  differ.
 - **A patch of ground is a ramp whole, and no patch is dropped for being small.** python-sc2 asks of each tile
   alone whether the nine terrain bytes around it are equal, calls a tile a ramp point if they are not, and then
   throws away any group of fewer than 8 of them. NachOS groups the ground a unit can walk over but cannot build
