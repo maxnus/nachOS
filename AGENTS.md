@@ -162,3 +162,4 @@ of its buildings.
 | Type check | `uv run pyright` |
 | Regenerate raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as `docs/curating-ids.md` says |
 | Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
+| Look at the ramps on a map | `uv run python tools/show_ramps.py`, which starts the game |
