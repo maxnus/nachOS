@@ -21,7 +21,7 @@ from sc2nachos.protocol import (
 from support import FakeTransport, make_game_info, make_observation, make_response
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
-_LADDER_MAP = "PylonAIE"
+_LADDER_MAP = "PylonAIE_v4"
 
 
 def _game(*steps: int, ending: Result | None = Result.VICTORY, stepped: bool = True) -> list[sc2api_pb2.Response]:

@@ -4,7 +4,7 @@ Needs StarCraft II installed. Records every game, or only those named, into `tes
 recording of the same name::
 
     uv run python tools/record_corpus.py
-    uv run python tools/record_corpus.py PylonAIE-TvZ
+    uv run python tools/record_corpus.py PylonAIE_v4-TvZ
 """
 
 import sys
@@ -34,7 +34,7 @@ class CorpusGame:
 
     @property
     def name(self) -> str:
-        """The map and the matchup, as in `PylonAIE-TvZ`."""
+        """The map and the matchup, as in `PylonAIE_v4-TvZ`."""
         return f"{self.map}-{_LETTERS[self.race]}v{_LETTERS[self.opponent.race]}"
 
     @property
@@ -44,11 +44,13 @@ class CorpusGame:
 
 
 GAMES = (
-    CorpusGame("PylonAIE", Race.TERRAN, Computer(Race.ZERG, Difficulty.VERY_HARD, AIBuild.POWER), seed=1),
-    CorpusGame("TorchesAIE", Race.TERRAN, Computer(Race.PROTOSS, Difficulty.VERY_HARD, AIBuild.AIR), seed=2),
-    CorpusGame("MagannathaAIE", Race.TERRAN, Computer(Race.TERRAN, Difficulty.VERY_HARD, AIBuild.MACRO), seed=3),
-    CorpusGame("LeyLinesAIE", Race.ZERG, Computer(Race.PROTOSS, Difficulty.VERY_HARD, AIBuild.TIMING), seed=4),
-    CorpusGame("PersephoneAIE", Race.PROTOSS, Computer(Race.TERRAN, Difficulty.VERY_HARD, AIBuild.POWER), seed=5),
+    CorpusGame("PylonAIE_v4", Race.TERRAN, Computer(Race.ZERG, Difficulty.VERY_HARD, AIBuild.POWER), seed=1),
+    CorpusGame("TorchesAIE_v4", Race.TERRAN, Computer(Race.PROTOSS, Difficulty.VERY_HARD, AIBuild.AIR), seed=2),
+    CorpusGame("MagannathaAIE_v2", Race.TERRAN, Computer(Race.TERRAN, Difficulty.VERY_HARD, AIBuild.MACRO), seed=3),
+    CorpusGame("LeyLinesAIE_v3", Race.ZERG, Computer(Race.PROTOSS, Difficulty.VERY_HARD, AIBuild.TIMING), seed=4),
+    CorpusGame("PersephoneAIE_v4", Race.PROTOSS, Computer(Race.TERRAN, Difficulty.VERY_HARD, AIBuild.POWER), seed=5),
+    CorpusGame("UltraloveAIE_v2", Race.ZERG, Computer(Race.TERRAN, Difficulty.VERY_HARD, AIBuild.RUSH), seed=6),
+    CorpusGame("IncorporealAIE_v4", Race.PROTOSS, Computer(Race.ZERG, Difficulty.VERY_HARD, AIBuild.MACRO), seed=7),
 )
 
 

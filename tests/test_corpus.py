@@ -18,7 +18,11 @@ CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 _CURATED: tuple[type[ReadableIntEnum], ...] = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
 # Obstacles on current maps that the curated set leaves out on purpose, because no size names them. M3 has to let
 # a bot meet one without raising.
-_UNNAMED_OBSTACLES = {RawUnitTypeId.DestructibleRockEx1DiagonalHugeBLUR, RawUnitTypeId.DestructibleExpeditionGate6x6}
+_UNNAMED_OBSTACLES = {
+    RawUnitTypeId.DestructibleCityDebrisHugeDiagonalULBR,
+    RawUnitTypeId.DestructibleExpeditionGate6x6,
+    RawUnitTypeId.DestructibleRockEx1DiagonalHugeBLUR,
+}
 
 
 def _observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:
